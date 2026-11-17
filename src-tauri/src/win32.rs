@@ -97,6 +97,14 @@ mod imp {
         }
     }
 
+    /// 親子階層や `WS_CHILD` / `WS_POPUP` 切替前に `WS_EX_LAYERED` を解除する。
+    unsafe fn clear_layered_ex_style(hwnd: HWND) {
+        let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        if (ex_style & (WS_EX_LAYERED.0 as isize)) != 0 {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style & !(WS_EX_LAYERED.0 as isize));
+        }
+    }
+
     /// モード A（最背面固定）を適用し、仮想スクリーン座標へ配置する。
     pub fn apply_bottom_mode_with_pos(
         window: &WebviewWindow,
@@ -113,6 +121,7 @@ mod imp {
         unsafe {
             let current_parent = GetParent(hwnd).unwrap_or_default();
             if !current_parent.0.is_null() {
+                clear_layered_ex_style(hwnd);
                 let _ = SetParent(hwnd, None);
                 let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
                 let new_style = (style & !(WS_CHILD.0 as isize)) | (WS_POPUP.0 as isize);
@@ -162,6 +171,7 @@ mod imp {
 
             let current_parent = GetParent(hwnd).unwrap_or_default();
             if current_parent != workerw {
+                clear_layered_ex_style(hwnd);
                 let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
                 let new_style = (style & !(WS_POPUP.0 as isize)) | (WS_CHILD.0 as isize);
                 SetWindowLongPtrW(hwnd, GWL_STYLE, new_style);
@@ -260,8 +270,12 @@ mod imp {
 
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style);
 
-            SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA)
-                .map_err(|e| format!("SetLayeredWindowAttributes failed: {e}"))?;
+            if SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA).is_err() {
+                clear_layered_ex_style(hwnd);
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style);
+                SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA)
+                    .map_err(|e| format!("SetLayeredWindowAttributes failed: {e}"))?;
+            }
 
             SetWindowPos(
                 hwnd,
