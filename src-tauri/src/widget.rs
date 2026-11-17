@@ -584,9 +584,20 @@ pub fn handle_widgetfile_protocol(
             .map(|w| PathBuf::from(&w.source))
     };
 
-    let Some(entry_file) = source_path else {
+    let Some(mut entry_file) = source_path else {
         return text_response(404, "widget not found");
     };
+
+    if !entry_file.is_file() {
+        if let Some(file_name) = entry_file.file_name() {
+            if let Some(samples_dir) = crate::resolve_samples_dir(app) {
+                let fallback = samples_dir.join(file_name);
+                if fallback.is_file() {
+                    entry_file = fallback;
+                }
+            }
+        }
+    }
 
     let target_file = if rel_path.is_empty() {
         entry_file.clone()

@@ -116,7 +116,17 @@ impl ConfigState {
             .map_err(|e| format!("failed to create config dir {}: {e}", dir.display()))?;
 
         let config_path = dir.join("config.json");
-        let config = load_with_backup_fallback(&config_path);
+        let is_first_launch = !config_path.exists() && !backup_path_for(&config_path).exists();
+        let mut config = load_with_backup_fallback(&config_path);
+
+        if is_first_launch && config.widgets.is_empty() {
+            if let Some(default_widget) = crate::build_default_sample_widget(app) {
+                config.widgets.push(default_widget);
+                if let Err(e) = save_atomic_with_backup(&config_path, &config) {
+                    eprintln!("[config] failed to persist default sample widget: {e}");
+                }
+            }
+        }
 
         Ok(Self {
             config: Mutex::new(config),

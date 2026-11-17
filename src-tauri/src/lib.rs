@@ -286,7 +286,7 @@ fn dev_samples_dir() -> Option<std::path::PathBuf> {
 }
 
 /// 同梱サンプル HTML フォルダを解決する（インストール版リソース → 実行ファイル隣 → 開発時リポジトリ直下）。
-fn resolve_samples_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_samples_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(resource_dir) = app.path().resource_dir() {
         candidates.push(resource_dir.join("samples"));
@@ -300,6 +300,36 @@ fn resolve_samples_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
         candidates.push(dev_dir);
     }
     candidates.into_iter().find(|p| p.is_dir())
+}
+
+/// 指定された `samples/` ディレクトリ内の `sticky-todo.html` から初期デフォルトガジェットを生成する。
+pub fn default_sample_widget_for_dir(
+    samples_dir: &std::path::Path,
+    x: i32,
+    y: i32,
+) -> Option<WidgetConfig> {
+    let sticky_path = samples_dir.join("sticky-todo.html");
+    if !sticky_path.is_file() {
+        return None;
+    }
+    Some(WidgetConfig {
+        title: "付箋メモ＆ToDo".to_string(),
+        source_type: SourceType::File,
+        source: strip_windows_verbatim_prefix(&sticky_path),
+        enabled: true,
+        x,
+        y,
+        width: 400,
+        height: 580,
+        ..Default::default()
+    })
+}
+
+/// 初回起動時（`config.json` 未作成時）にデフォルト登録するサンプルガジェットを構築する。
+pub fn build_default_sample_widget(app: &AppHandle) -> Option<WidgetConfig> {
+    let samples_dir = resolve_samples_dir(app)?;
+    let (x, y) = next_cascade_position(app, &[]);
+    default_sample_widget_for_dir(&samples_dir, x, y)
 }
 
 #[tauri::command]
@@ -628,6 +658,43 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
     Ok(enabled)
 }
 
+/// `config.json` の自動起動設定と OS 側スタートアップ登録状態の差分を判定する。
+/// 戻り値は `(OS側へ自動起動を再登録するか, config.json側をtrueへ同期保存するか)`。
+pub fn plan_autostart_sync(config_autostart: bool, os_enabled: bool) -> (bool, bool) {
+    match (config_autostart, os_enabled) {
+        (true, false) => (true, false),
+        (false, true) => (false, true),
+        _ => (false, false),
+    }
+}
+
+/// 起動時に自動起動設定を照合し、インストーラ上書き更新等で OS 側登録が消えていた場合は自動復元する。
+fn sync_autostart_on_startup(app: &AppHandle, state: &Arc<ConfigState>) {
+    let config_autostart = state
+        .config
+        .lock()
+        .map(|cfg| cfg.autostart)
+        .unwrap_or(false);
+    let autolaunch = app.autolaunch();
+    let os_enabled = autolaunch.is_enabled().unwrap_or(false);
+
+    let (should_enable_os, should_save_config_true) =
+        plan_autostart_sync(config_autostart, os_enabled);
+
+    if should_enable_os {
+        if let Err(e) = autolaunch.enable() {
+            eprintln!("[autostart] failed to restore OS autostart: {e}");
+        }
+    }
+
+    if should_save_config_true {
+        if let Ok(mut cfg) = state.config.lock() {
+            cfg.autostart = true;
+        }
+        let _ = state.save_now();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -652,6 +719,7 @@ pub fn run() {
                 ConfigState::load_or_init(app.handle())
                     .expect("failed to initialize ConfigState"),
             );
+            sync_autostart_on_startup(app.handle(), &config_state);
             app.manage(config_state);
 
             if let Some(manager_win) = app.get_webview_window("manager") {
@@ -763,5 +831,25 @@ mod tests {
             strip_windows_verbatim_prefix(verbatim),
             r"C:\Program Files\DesktopDashboards\samples"
         );
+    }
+
+    #[test]
+    fn test_plan_autostart_sync() {
+        assert_eq!(plan_autostart_sync(true, false), (true, false));
+        assert_eq!(plan_autostart_sync(false, true), (false, true));
+        assert_eq!(plan_autostart_sync(true, true), (false, false));
+        assert_eq!(plan_autostart_sync(false, false), (false, false));
+    }
+
+    #[test]
+    fn default_sample_widget_uses_sticky_todo() {
+        let samples_dir = dev_samples_dir().expect("samples directory should exist at repo root");
+        let w = default_sample_widget_for_dir(&samples_dir, 40, 40)
+            .expect("default sample widget should be created");
+        assert_eq!(w.title, "付箋メモ＆ToDo");
+        assert_eq!(w.source_type, SourceType::File);
+        assert!(w.source.ends_with("sticky-todo.html"));
+        assert!(w.enabled);
+        assert_eq!((w.width, w.height), (400, 580));
     }
 }

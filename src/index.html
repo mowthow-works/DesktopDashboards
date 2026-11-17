@@ -292,13 +292,13 @@
       </div>
       <div class="field">
         <label class="field-label" for="widget-title">タイトル（任意）</label>
-        <input id="widget-title" type="text" placeholder="例: 通勤電車 時刻表" />
+        <input id="widget-title" type="text" placeholder="例: 付箋メモ＆ToDo" />
       </div>
     </div>
     <div class="row">
       <div class="field">
         <label class="field-label" for="widget-source">URL または HTML ファイルパス</label>
-        <input id="widget-source" type="text" placeholder="https://muse.ai/..." />
+        <input id="widget-source" type="text" placeholder="https://example.com/..." />
       </div>
       <button class="secondary" id="btn-browse" style="margin-top: 18px; display: none;">参照...</button>
       <button class="primary" id="btn-add" style="margin-top: 18px;">追加して表示</button>
@@ -350,7 +350,7 @@
       browseBtn.style.display = isFile ? "inline-block" : "none";
       sourceEl.placeholder = isFile
         ? "C:\\path\\to\\widget.html"
-        : "https://muse.ai/...";
+        : "https://example.com/...";
     });
 
     browseBtn.addEventListener("click", async () => {

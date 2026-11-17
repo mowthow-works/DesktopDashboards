@@ -9,7 +9,9 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "build:debug": "tauri build --debug",
-    "tauri": "tauri"
+    "build:installer": "tauri build",
+    "tauri": "tauri",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
