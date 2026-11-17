@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>自作ガジェット スターターテンプレート - DesktopDashboards</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1b2029;
+      --border: #2c3442;
+      --text: #eef2f6;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #34d399;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    /* 上端 28px はロック解除時のホバー操作バーと重ならないよう余白を確保 */
+    body {
+      padding: 34px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      white-space: nowrap;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      background: #141820;
+      border: 1px solid #242b38;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stat.full {
+      grid-column: 1 / -1;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .stat-val {
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      word-break: break-all;
+    }
+    ul.spec-list {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+    code {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 11px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #0f1217;
+      border: 1px solid #2b3444;
+      color: #7dd3fc;
+    }
+    .demo-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .counter-val {
+      font-size: 20px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+    .btn-group {
+      display: flex;
+      gap: 6px;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 6px 11px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+    .links {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>自作ガジェット テンプレート</h1>
+    <span class="tag">LOCAL HTML</span>
+  </header>
+
+  <section class="card">
+    <h2>ライブ環境ステータス</h2>
+    <div class="status-grid">
+      <div class="stat">
+        <div class="stat-label">現在時刻</div>
+        <div class="stat-val" id="live-clock">--:--:--</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">描画サイズ</div>
+        <div class="stat-val" id="live-size">0 × 0</div>
+      </div>
+      <div class="stat full">
+        <div class="stat-label">割り当てオリジン（widgetfile プロトコル）</div>
+        <div class="stat-val" id="live-origin">-</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>ローカル HTML ガジェット作成ガイド</h2>
+    <ul class="spec-list">
+      <li>
+        このファイル（<code>samples/starter-template.html</code>）を任意のフォルダへコピーして自由に編集できます。
+      </li>
+      <li>
+        同じフォルダ・サブフォルダ内の資産（<code>./style.css</code>、<code>./app.js</code>、画像等）は相対パスで読み込めます。
+      </li>
+      <li>
+        上端 <code>28px</code> に操作バーが表示されるため、<code>body</code> に <code>padding-top: 32px</code> 程度を確保すると操作しやすくなります。
+      </li>
+      <li>
+        管理画面の「カスタム CSS」から <code>body { background: transparent !important; }</code> のような上書きも可能です。
+      </li>
+      <li>
+        外部リンク（<code>https://...</code>）はガジェット内ではなく OS の既定ブラウザで開きます。
+      </li>
+    </ul>
+    <div class="links">
+      <span>外部リンク動作テスト:</span>
+      <a href="https://example.com" target="_blank" rel="noopener noreferrer">
+        example.com を既定ブラウザで開く ↗
+      </a>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>localStorage 永続化テスト</h2>
+    <div class="demo-row">
+      <div>
+        保存カウント: <span class="counter-val" id="counter-val">0</span>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="primary" id="btn-inc">+1 カウント</button>
+        <button type="button" class="secondary" id="btn-reset">リセット</button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "dd_sample_starter_counter_v1";
+      const clockEl = document.getElementById("live-clock");
+      const sizeEl = document.getElementById("live-size");
+      const originEl = document.getElementById("live-origin");
+      const counterValEl = document.getElementById("counter-val");
+      const incBtn = document.getElementById("btn-inc");
+      const resetBtn = document.getElementById("btn-reset");
+
+      function updateClock() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        clockEl.textContent = `${hh}:${mm}:${ss}`;
+      }
+
+      function updateSize() {
+        sizeEl.textContent = `${window.innerWidth} × ${window.innerHeight}`;
+      }
+
+      function loadCount() {
+        try {
+          const val = parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
+          return Number.isFinite(val) ? val : 0;
+        } catch (_) {
+          return 0;
+        }
+      }
+
+      function saveCount(val) {
+        try {
+          localStorage.setItem(STORAGE_KEY, String(val));
+        } catch (_) {}
+      }
+
+      let count = loadCount();
+      function renderCount() {
+        counterValEl.textContent = String(count);
+      }
+
+      incBtn.addEventListener("click", () => {
+        count += 1;
+        saveCount(count);
+        renderCount();
+      });
+
+      resetBtn.addEventListener("click", () => {
+        count = 0;
+        saveCount(count);
+        renderCount();
+      });
+
+      originEl.textContent = location.origin || location.href;
+      updateClock();
+      updateSize();
+      renderCount();
+
+      setInterval(updateClock, 1000);
+      window.addEventListener("resize", updateSize);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>付箋メモ＆ToDoリスト - DesktopDashboards サンプル</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1b2029;
+      --panel-sub: #141820;
+      --border: #2c3442;
+      --text: #eef2f6;
+      --muted: #94a3b8;
+      --subtle: #64748b;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #34d399;
+      --danger: #f87171;
+      --sticky-bg: #1f242e;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    /* 上端 28px はロック解除時のホバー操作バー領域のため余白を確保 */
+    body {
+      padding: 34px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(59, 130, 246, 0.16);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      white-space: nowrap;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin: 0;
+    }
+    .add-row {
+      display: flex;
+      gap: 6px;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      border: 1px solid #384252;
+      background: #0f1217;
+      color: #f8fafc;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"] {
+      padding: 7px 10px;
+    }
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+    textarea {
+      min-height: 112px;
+      padding: 9px 10px;
+      resize: vertical;
+      background: var(--sticky-bg);
+      line-height: 1.55;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 11px;
+      white-space: nowrap;
+      transition: opacity 0.15s, background-color 0.15s;
+    }
+    button:hover {
+      opacity: 0.92;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--muted);
+      padding: 3px 7px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    button.ghost:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+    }
+    button.ghost.danger:hover {
+      color: var(--danger);
+      background: rgba(248, 113, 113, 0.12);
+    }
+    .todo-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 6px;
+      background: var(--panel-sub);
+      border: 1px solid #242b38;
+    }
+    .todo-item input[type="checkbox"] {
+      margin-top: 2px;
+      width: 15px;
+      height: 15px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .todo-text {
+      flex: 1;
+      word-break: break-word;
+      cursor: pointer;
+      user-select: text;
+    }
+    .todo-item.done .todo-text {
+      text-decoration: line-through;
+      color: var(--subtle);
+    }
+    .todo-del {
+      flex-shrink: 0;
+      padding: 1px 6px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .empty {
+      text-align: center;
+      color: var(--subtle);
+      font-size: 12px;
+      padding: 14px 4px;
+    }
+    .memo-status {
+      font-size: 11px;
+      color: var(--success);
+    }
+    .tips {
+      background: rgba(15, 18, 23, 0.65);
+      border: 1px dashed #2e3746;
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .tips strong {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title-wrap">
+      <h1>付箋メモ＆ToDo</h1>
+      <span class="badge" id="remaining-badge">残り 0 件</span>
+    </div>
+    <button type="button" class="ghost" id="btn-clear-done">完了済みを削除</button>
+  </div>
+
+  <section class="card" aria-label="ToDoリスト">
+    <div class="add-row">
+      <input
+        id="todo-input"
+        type="text"
+        placeholder="新しいタスクを入力して Enter..."
+        autocomplete="off"
+      />
+      <button type="button" class="primary" id="btn-add-todo">追加</button>
+    </div>
+    <ul class="todo-list" id="todo-list"></ul>
+  </section>
+
+  <section class="card" aria-label="付箋メモ">
+    <div class="section-head">
+      <h2 class="section-title">フリーメモ（自動保存）</h2>
+      <span class="memo-status" id="memo-status">準備完了</span>
+    </div>
+    <textarea
+      id="memo-area"
+      placeholder="ちょっとしたメモや作業ログを自由に書き込めます..."
+    ></textarea>
+  </section>
+
+  <footer class="tips">
+    <div><strong>リロードガード対応:</strong> 入力欄にフォーカス中または操作直後は自動更新が延期されます。</div>
+    <div><strong>おすすめ設定:</strong> 管理画面で「フォーカス非奪取」を ON にすると作業の邪魔になりません。</div>
+  </footer>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "dd_sample_sticky_todo_v1";
+
+      const DEFAULT_TODOS = [
+        { id: "init-1", text: "ガジェット上端にマウスを乗せて好きな位置へ移動する", done: false },
+        { id: "init-2", text: "管理画面で「透明度」や「フォーカス非奪取」を試す", done: false },
+        { id: "init-3", text: "下のメモ欄やToDoに自由に書き込んでみる（自動保存）", done: false }
+      ];
+
+      const DEFAULT_MEMO =
+        "【デスクトップ付箋サンプル】\n" +
+        "入力した内容は localStorage に即時保存されるため、\n" +
+        "アプリを再起動してもメモが残ります。";
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            return {
+              todos: DEFAULT_TODOS.map((item) => ({ ...item })),
+              memo: DEFAULT_MEMO,
+              savedAt: null
+            };
+          }
+          const parsed = JSON.parse(raw);
+          return {
+            todos: Array.isArray(parsed.todos) ? parsed.todos : [],
+            memo: typeof parsed.memo === "string" ? parsed.memo : "",
+            savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : null
+          };
+        } catch (_) {
+          return {
+            todos: DEFAULT_TODOS.map((item) => ({ ...item })),
+            memo: DEFAULT_MEMO,
+            savedAt: null
+          };
+        }
+      }
+
+      function formatTime(date) {
+        const hh = String(date.getHours()).padStart(2, "0");
+        const mm = String(date.getMinutes()).padStart(2, "0");
+        const ss = String(date.getSeconds()).padStart(2, "0");
+        return `${hh}:${mm}:${ss}`;
+      }
+
+      const state = loadState();
+      const todoInput = document.getElementById("todo-input");
+      const addTodoBtn = document.getElementById("btn-add-todo");
+      const clearDoneBtn = document.getElementById("btn-clear-done");
+      const todoListEl = document.getElementById("todo-list");
+      const remainingBadgeEl = document.getElementById("remaining-badge");
+      const memoAreaEl = document.getElementById("memo-area");
+      const memoStatusEl = document.getElementById("memo-status");
+
+      function saveState(updateTimestamp = true) {
+        if (updateTimestamp) {
+          state.savedAt = formatTime(new Date());
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          memoStatusEl.textContent = state.savedAt ? `保存済み ${state.savedAt}` : "保存済み";
+        } catch (_) {
+          memoStatusEl.textContent = "保存に失敗しました";
+        }
+      }
+
+      function renderTodos() {
+        todoListEl.innerHTML = "";
+        const remaining = state.todos.filter((t) => !t.done).length;
+        remainingBadgeEl.textContent = `残り ${remaining} 件`;
+
+        if (state.todos.length === 0) {
+          const empty = document.createElement("li");
+          empty.className = "empty";
+          empty.textContent = "タスクはありません。上の入力欄から追加できます。";
+          todoListEl.appendChild(empty);
+          return;
+        }
+
+        for (const item of state.todos) {
+          const li = document.createElement("li");
+          li.className = `todo-item${item.done ? " done" : ""}`;
+
+          const chk = document.createElement("input");
+          chk.type = "checkbox";
+          chk.checked = !!item.done;
+          chk.addEventListener("change", () => {
+            item.done = chk.checked;
+            saveState();
+            renderTodos();
+          });
+
+          const textSpan = document.createElement("span");
+          textSpan.className = "todo-text";
+          textSpan.textContent = item.text;
+          textSpan.addEventListener("click", () => {
+            item.done = !item.done;
+            saveState();
+            renderTodos();
+          });
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "ghost danger todo-del";
+          delBtn.title = "削除";
+          delBtn.textContent = "✕";
+          delBtn.addEventListener("click", () => {
+            state.todos = state.todos.filter((t) => t.id !== item.id);
+            saveState();
+            renderTodos();
+          });
+
+          li.appendChild(chk);
+          li.appendChild(textSpan);
+          li.appendChild(delBtn);
+          todoListEl.appendChild(li);
+        }
+      }
+
+      function addTodo() {
+        const text = todoInput.value.trim();
+        if (!text) return;
+        state.todos.unshift({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          text,
+          done: false
+        });
+        todoInput.value = "";
+        saveState();
+        renderTodos();
+      }
+
+      addTodoBtn.addEventListener("click", addTodo);
+      todoInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.isComposing) {
+          e.preventDefault();
+          addTodo();
+        }
+      });
+
+      clearDoneBtn.addEventListener("click", () => {
+        const nextTodos = state.todos.filter((t) => !t.done);
+        if (nextTodos.length === state.todos.length) return;
+        state.todos = nextTodos;
+        saveState();
+        renderTodos();
+      });
+
+      memoAreaEl.value = state.memo;
+      if (state.savedAt) {
+        memoStatusEl.textContent = `保存済み ${state.savedAt}`;
+      }
+
+      memoAreaEl.addEventListener("input", () => {
+        state.memo = memoAreaEl.value;
+        saveState(true);
+      });
+
+      renderTodos();
+    })();
+  </script>
+</body>
+</html>

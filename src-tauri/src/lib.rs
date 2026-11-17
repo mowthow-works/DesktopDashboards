@@ -272,10 +272,45 @@ fn handle_cli_options(app: &AppHandle, opts: cli::CliOptions, is_secondary_insta
     }
 }
 
+fn strip_windows_verbatim_prefix(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
+/// 開発時リポジトリ直下の `samples/` ディレクトリを返す。
+fn dev_samples_dir() -> Option<std::path::PathBuf> {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|d| d.join("samples"))
+        .filter(|d| d.is_dir())
+}
+
+/// 同梱サンプル HTML フォルダを解決する（インストール版リソース → 実行ファイル隣 → 開発時リポジトリ直下）。
+fn resolve_samples_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("samples"));
+    }
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            candidates.push(exe_dir.join("samples"));
+        }
+    }
+    if let Some(dev_dir) = dev_samples_dir() {
+        candidates.push(dev_dir);
+    }
+    candidates.into_iter().find(|p| p.is_dir())
+}
+
 #[tauri::command]
 fn get_webview_data_dir(app: AppHandle) -> Result<String, String> {
     let dir = widget::resolve_webview_data_dir(&app)?;
     Ok(dir.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn get_samples_dir(app: AppHandle) -> Result<Option<String>, String> {
+    Ok(resolve_samples_dir(&app).map(|p| strip_windows_verbatim_prefix(&p)))
 }
 
 #[tauri::command]
@@ -646,6 +681,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_webview_data_dir,
+            get_samples_dir,
             list_widgets,
             add_widget,
             toggle_widget,
@@ -706,5 +742,26 @@ mod tests {
             next_non_overlapping_position(0, 0, 1920, 1080, 480, 760, &[first, second]);
         assert_eq!(overlap_area(x1, y1, 480, 760, x3, y3, 480, 760), 0);
         assert_eq!(overlap_area(x2, y2, 480, 760, x3, y3, 480, 760), 0);
+    }
+
+    #[test]
+    fn bundled_samples_exist_and_prefix_is_stripped() {
+        let samples_dir = dev_samples_dir().expect("samples directory should exist at repo root");
+        for name in [
+            "sticky-todo.html",
+            "pomodoro-timer.html",
+            "starter-template.html",
+        ] {
+            assert!(
+                samples_dir.join(name).is_file(),
+                "missing bundled sample file: {name}"
+            );
+        }
+
+        let verbatim = std::path::Path::new(r"\\?\C:\Program Files\DesktopDashboards\samples");
+        assert_eq!(
+            strip_windows_verbatim_prefix(verbatim),
+            r"C:\Program Files\DesktopDashboards\samples"
+        );
     }
 }

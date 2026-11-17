@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ポモドーロ集中タイマー - DesktopDashboards サンプル</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1b2029;
+      --border: #2c3442;
+      --text: #eef2f6;
+      --muted: #94a3b8;
+      --focus: #3b82f6;
+      --short: #10b981;
+      --long: #8b5cf6;
+      --active-color: var(--focus);
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    /* 上端 28px はロック解除時のホバー操作バー領域のため余白を確保 */
+    body {
+      padding: 34px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .count-pill {
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fde68a;
+      white-space: nowrap;
+    }
+    .icon-btn {
+      border: 1px solid #334155;
+      background: #1b2029;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .icon-btn:hover {
+      background: #252c38;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      width: 100%;
+    }
+    .mode-tab {
+      border: 1px solid #2e3746;
+      background: #141820;
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 6px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mode-tab.active {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: var(--active-color);
+      color: #fff;
+    }
+    .ring-wrap {
+      position: relative;
+      width: 176px;
+      height: 176px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ring-svg {
+      width: 176px;
+      height: 176px;
+      transform: rotate(-90deg);
+    }
+    .ring-track {
+      fill: none;
+      stroke: #242c3a;
+      stroke-width: 10;
+    }
+    .ring-progress {
+      fill: none;
+      stroke: var(--active-color);
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.3s ease, stroke 0.2s ease;
+    }
+    .ring-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .mode-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .time-display {
+      font-size: 38px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      font-variant-numeric: tabular-nums;
+      font-family: "Cascadia Code", Consolas, "Segoe UI", monospace;
+    }
+    .adjust-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .adjust-btn {
+      border: 1px solid #334155;
+      background: #141820;
+      color: #cbd5e1;
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .adjust-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .controls button {
+      border: none;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .controls button:hover {
+      opacity: 0.92;
+    }
+    .btn-primary {
+      flex: 1;
+      background: var(--active-color);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #2b3444;
+      color: #e2e8f0;
+    }
+    .task-box {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .task-box label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .task-box input {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 7px;
+      border: 1px solid #384252;
+      background: #0f1217;
+      color: #f8fafc;
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    .task-box input:focus {
+      border-color: var(--active-color);
+    }
+    .banner {
+      display: none;
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(16, 185, 129, 0.16);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      color: #a7f3d0;
+      font-size: 12px;
+      text-align: center;
+    }
+    .banner.show {
+      display: block;
+    }
+    .hint {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ポモドーロタイマー</h1>
+    <div class="header-actions">
+      <span class="count-pill" id="today-count">🍅 今日: 0回</span>
+      <button type="button" class="icon-btn" id="btn-mute" title="通知音 ON/OFF">🔔 音ON</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="mode-tabs" role="tablist">
+      <button type="button" class="mode-tab active" data-mode="focus">集中 25分</button>
+      <button type="button" class="mode-tab" data-mode="short">小休憩 5分</button>
+      <button type="button" class="mode-tab" data-mode="long">長休憩 15分</button>
+    </div>
+
+    <div class="ring-wrap">
+      <svg class="ring-svg" viewBox="0 0 176 176" aria-hidden="true">
+        <circle class="ring-track" cx="88" cy="88" r="76" />
+        <circle class="ring-progress" id="ring-progress" cx="88" cy="88" r="76" />
+      </svg>
+      <div class="ring-center">
+        <span class="mode-label" id="mode-label">集中タイム</span>
+        <div class="time-display" id="time-display">25:00</div>
+        <div class="adjust-row">
+          <button type="button" class="adjust-btn" id="btn-minus">-1分</button>
+          <button type="button" class="adjust-btn" id="btn-plus">+1分</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="banner" id="finish-banner"></div>
+
+    <div class="controls">
+      <button type="button" class="btn-primary" id="btn-toggle">開始</button>
+      <button type="button" class="btn-secondary" id="btn-reset">リセット</button>
+      <button type="button" class="btn-secondary" id="btn-skip">スキップ</button>
+    </div>
+
+    <div class="task-box">
+      <label for="current-task">いま集中するタスク（自動保存）</label>
+      <input
+        id="current-task"
+        type="text"
+        placeholder="例: 仕様書のレビューを終わらせる"
+        autocomplete="off"
+      />
+    </div>
+  </section>
+
+  <div class="hint">
+    「フォーカス非奪取」を ON にすると作業中に残り時間をチラ見しやすくなります。
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "dd_sample_pomodoro_v1";
+      const CIRCUMFERENCE = 2 * Math.PI * 76;
+
+      const MODES = {
+        focus: { label: "集中タイム", defaultSec: 25 * 60, color: "#3b82f6" },
+        short: { label: "小休憩", defaultSec: 5 * 60, color: "#10b981" },
+        long: { label: "長休憩", defaultSec: 15 * 60, color: "#8b5cf6" }
+      };
+
+      function getTodayKey() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
+      function loadSaved() {
+        const today = getTodayKey();
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            return { date: today, count: 0, muted: false, task: "" };
+          }
+          const parsed = JSON.parse(raw);
+          const count = parsed.date === today && typeof parsed.count === "number" ? parsed.count : 0;
+          return {
+            date: today,
+            count,
+            muted: !!parsed.muted,
+            task: typeof parsed.task === "string" ? parsed.task : ""
+          };
+        } catch (_) {
+          return { date: today, count: 0, muted: false, task: "" };
+        }
+      }
+
+      const saved = loadSaved();
+      let currentMode = "focus";
+      let totalSeconds = MODES.focus.defaultSec;
+      let remainingSeconds = totalSeconds;
+      let running = false;
+      let timerId = null;
+      let targetEndMs = 0;
+
+      const ringProgressEl = document.getElementById("ring-progress");
+      const modeLabelEl = document.getElementById("mode-label");
+      const timeDisplayEl = document.getElementById("time-display");
+      const todayCountEl = document.getElementById("today-count");
+      const muteBtn = document.getElementById("btn-mute");
+      const toggleBtn = document.getElementById("btn-toggle");
+      const resetBtn = document.getElementById("btn-reset");
+      const skipBtn = document.getElementById("btn-skip");
+      const minusBtn = document.getElementById("btn-minus");
+      const plusBtn = document.getElementById("btn-plus");
+      const taskInput = document.getElementById("current-task");
+      const bannerEl = document.getElementById("finish-banner");
+      const modeTabs = Array.from(document.querySelectorAll(".mode-tab"));
+
+      ringProgressEl.style.strokeDasharray = `${CIRCUMFERENCE}`;
+
+      function persist() {
+        const today = getTodayKey();
+        if (saved.date !== today) {
+          saved.date = today;
+          saved.count = 0;
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        } catch (_) {}
+      }
+
+      function playChime() {
+        if (saved.muted) return;
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          const notes = [523.25, 659.25, 783.99];
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            const start = ctx.currentTime + idx * 0.14;
+            gain.gain.setValueAtTime(0.0001, start);
+            gain.gain.exponentialRampToValueAtTime(0.14, start + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.45);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + 0.48);
+          });
+          setTimeout(() => {
+            ctx.close().catch(() => {});
+          }, 1200);
+        } catch (_) {}
+      }
+
+      function formatMMSS(sec) {
+        const clamped = Math.max(0, Math.floor(sec));
+        const m = Math.floor(clamped / 60);
+        const s = clamped % 60;
+        return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      }
+
+      function updateUI() {
+        const modeInfo = MODES[currentMode];
+        document.documentElement.style.setProperty("--active-color", modeInfo.color);
+        modeLabelEl.textContent = modeInfo.label;
+        timeDisplayEl.textContent = formatMMSS(remainingSeconds);
+        document.title = `${formatMMSS(remainingSeconds)} - ${modeInfo.label}`;
+
+        const ratio = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
+        const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, ratio)));
+        ringProgressEl.style.strokeDashoffset = `${offset}`;
+
+        toggleBtn.textContent = running ? "一時停止" : "開始";
+        minusBtn.disabled = running || totalSeconds <= 60;
+        plusBtn.disabled = running || totalSeconds >= 90 * 60;
+
+        const today = getTodayKey();
+        if (saved.date !== today) {
+          saved.date = today;
+          saved.count = 0;
+          persist();
+        }
+        todayCountEl.textContent = `🍅 今日: ${saved.count}回`;
+        muteBtn.textContent = saved.muted ? "🔇 消音" : "🔔 音ON";
+
+        modeTabs.forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.mode === currentMode);
+        });
+      }
+
+      function stopTimer() {
+        running = false;
+        if (timerId !== null) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+      }
+
+      function switchMode(nextMode, clearBanner = true) {
+        stopTimer();
+        currentMode = nextMode;
+        totalSeconds = MODES[nextMode].defaultSec;
+        remainingSeconds = totalSeconds;
+        if (clearBanner) {
+          bannerEl.classList.remove("show");
+          bannerEl.textContent = "";
+        }
+        updateUI();
+      }
+
+      function completeSession(completedNaturally) {
+        stopTimer();
+        let msg = "";
+        if (currentMode === "focus") {
+          if (completedNaturally) {
+            saved.count += 1;
+            persist();
+          }
+          const nextMode = saved.count > 0 && saved.count % 4 === 0 ? "long" : "short";
+          msg = completedNaturally
+            ? `集中完了！${MODES[nextMode].label}に切り替えました。`
+            : `${MODES[nextMode].label}にスキップしました。`;
+          switchMode(nextMode, false);
+        } else {
+          msg = completedNaturally
+            ? "休憩終了！次の集中タイムの準備ができました。"
+            : "集中タイムにスキップしました。";
+          switchMode("focus", false);
+        }
+        bannerEl.textContent = msg;
+        bannerEl.classList.add("show");
+        if (completedNaturally) {
+          playChime();
+        }
+        updateUI();
+      }
+
+      function tick() {
+        const diff = Math.ceil((targetEndMs - Date.now()) / 1000);
+        if (diff <= 0) {
+          remainingSeconds = 0;
+          updateUI();
+          completeSession(true);
+          return;
+        }
+        remainingSeconds = diff;
+        updateUI();
+      }
+
+      function toggleStartPause() {
+        bannerEl.classList.remove("show");
+        if (running) {
+          stopTimer();
+          updateUI();
+          return;
+        }
+        running = true;
+        targetEndMs = Date.now() + remainingSeconds * 1000;
+        timerId = setInterval(tick, 250);
+        updateUI();
+      }
+
+      modeTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const next = tab.dataset.mode;
+          if (next && MODES[next]) {
+            switchMode(next);
+          }
+        });
+      });
+
+      toggleBtn.addEventListener("click", toggleStartPause);
+
+      resetBtn.addEventListener("click", () => {
+        stopTimer();
+        remainingSeconds = totalSeconds;
+        bannerEl.classList.remove("show");
+        updateUI();
+      });
+
+      skipBtn.addEventListener("click", () => {
+        completeSession(false);
+      });
+
+      minusBtn.addEventListener("click", () => {
+        if (running || totalSeconds <= 60) return;
+        totalSeconds -= 60;
+        remainingSeconds = totalSeconds;
+        updateUI();
+      });
+
+      plusBtn.addEventListener("click", () => {
+        if (running || totalSeconds >= 90 * 60) return;
+        totalSeconds += 60;
+        remainingSeconds = totalSeconds;
+        updateUI();
+      });
+
+      muteBtn.addEventListener("click", () => {
+        saved.muted = !saved.muted;
+        persist();
+        updateUI();
+      });
+
+      taskInput.value = saved.task;
+      taskInput.addEventListener("input", () => {
+        saved.task = taskInput.value;
+        persist();
+      });
+
+      updateUI();
+    })();
+  </script>
+</body>
+</html>

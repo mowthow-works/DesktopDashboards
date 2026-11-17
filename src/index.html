@@ -338,6 +338,7 @@
     const autostartChk = document.getElementById("chk-autostart");
     const statusEl = document.getElementById("status");
     const dataDirEl = document.getElementById("data-dir");
+    let samplesDirPath = null;
 
     function setStatus(msg, isError = false) {
       statusEl.textContent = msg;
@@ -358,10 +359,20 @@
         return;
       }
       try {
-        const selected = await dialogOpen({
+        if (!samplesDirPath) {
+          const dir = await invoke("get_samples_dir").catch(() => null);
+          if (typeof dir === "string" && dir) {
+            samplesDirPath = dir;
+          }
+        }
+        const dialogOptions = {
           multiple: false,
           filters: [{ name: "HTML ファイル", extensions: ["html", "htm"] }],
-        });
+        };
+        if (samplesDirPath) {
+          dialogOptions.defaultPath = samplesDirPath;
+        }
+        const selected = await dialogOpen(dialogOptions);
         if (typeof selected === "string" && selected) {
           sourceEl.value = selected;
         }
@@ -735,6 +746,14 @@
       .catch((err) => {
         dataDirEl.textContent = `取得失敗: ${err}`;
       });
+
+    invoke("get_samples_dir")
+      .then((dir) => {
+        if (typeof dir === "string" && dir) {
+          samplesDirPath = dir;
+        }
+      })
+      .catch(() => {});
 
     refreshAll();
   </script>

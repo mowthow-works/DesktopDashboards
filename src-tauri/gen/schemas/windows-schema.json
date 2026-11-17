@@ -363,6 +363,12 @@
           "markdownDescription": "Enables the get_autostart command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_samples_dir command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-samples-dir",
+          "markdownDescription": "Enables the get_samples_dir command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_webview_data_dir command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-webview-data-dir",
@@ -439,6 +445,12 @@
           "type": "string",
           "const": "deny-get-autostart",
           "markdownDescription": "Denies the get_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_samples_dir command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-samples-dir",
+          "markdownDescription": "Denies the get_samples_dir command without any pre-configured scope."
         },
         {
           "description": "Denies the get_webview_data_dir command without any pre-configured scope.",
