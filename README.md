@@ -27,7 +27,7 @@
   - **定期自動リロード＋リロードガード**: 1〜60分間隔の自動リロードと、入力欄フォーカス中・操作直後のリロード延期保護
   - **カスタム CSS 注入（Phase 3）**: ガジェットごとに任意の CSS を編集・即時適用・永続化
 - **設定の原子的永続化＆自動起動の自動復元**: `%APPDATA%\DesktopDashboards\config.json` への原子的書き込み（`.tmp` + flush + リネーム）および 1 世代バックアップ（`.bak`）フォールバック。Windows 自動起動設定も `config.json` に保存され、バージョンアップ（上書きインストール）等で OS 側スタートアップ登録が消去されても次回起動時に自動復元
-- **管理画面 & システムトレイ常駐**: ガジェットの追加・表示切替・位置サイズ調整・各種詳細設定・削除、Windows 起動時の自動起動（`--silent`）トグル
+- **管理画面 & システムトレイ常駐**: ガジェットの追加・表示切替・位置サイズ調整・各種詳細設定・削除、外部サービス接続（SaaS 連携）の一覧・追加（送信先明示＋`credential_schema` 動的フォーム）・トークン差し替え・削除・接続テスト、Windows 起動時の自動起動（`--silent`）トグル
 - **NSIS インストーラ対応**: 日本語・英語に対応した Per-user インストーラおよびポータブル ZIP 配布に対応
 
 ## 📥 インストール
@@ -73,9 +73,9 @@ Web URL だけでなく、ローカルに作成した HTML ファイルをデス
 - **相対パス資産**: 選択した HTML と同じフォルダおよびサブフォルダ内の CSS / JS / 画像 / JSON 等は相対パスで読み込めます（`widgetfile` カスタムプロトコル経由・親ディレクトリ外への参照は遮断）。
 - **上端余白**: ロック解除時は上端 28px にホバー操作バーが表示されるため、`body` に `padding-top: 32px` 程度を確保すると操作しやすくなります。
 - **外部リンク**: `http://` / `https://` へのリンクはガジェット内ではなく OS の既定ブラウザで開きます。
-- **`window.DD` ブリッジ（Phase 4b-1）**: ローカル HTML ガジェットのトップフレーム（`http://widgetfile.localhost`）にのみ注入され、ウィジェット単位の分離ストレージ（`DD.storage.get` / `set`、`%APPDATA%\DesktopDashboards\storage\{widget_id}.json` 保存）および宣言的コネクタ経由の API ブリッジ（`DD.connect.request`）を利用できます。URL ガジェットや外部 `<iframe>` からの呼び出しは Tauri ACL および Rust 側 `Origin` 検証で遮断されます。
+- **`window.DD` ブリッジ（Phase 4b）**: ローカル HTML ガジェットのトップフレーム（`http://widgetfile.localhost`）にのみ注入され、ウィジェット単位の分離ストレージ（`DD.storage.get` / `set`、`%APPDATA%\DesktopDashboards\storage\{widget_id}.json` 保存）および宣言的コネクタ経由の API ブリッジ（`DD.connect.request`）を利用できます。URL ガジェットや外部 `<iframe>` からの呼び出しは Tauri ACL および Rust 側 `Origin` 検証で遮断されます。
   - **権限積集合と制限モード**: 同梱コネクタ定義（`connectors/notion.json` 等および `%APPDATA%\DesktopDashboards\connectors\*.json`）と、HTML と同じフォルダのウィジェット manifest（`<html_stem>.manifest.json` → `manifest.json`）双方の `endpoints` に一致するリクエストのみ許可されます。manifest が無いローカル HTML は制限モードとなり、`DD.storage` のみ利用できます（`DD.connect` は拒否）。
-  - **資格情報管理**: API トークン等の秘密情報は Windows 資格情報マネージャー（`DesktopDashboards:connection:<connection_id>:<credential_key>`）へ保管され、`%APPDATA%\DesktopDashboards\connections.json`（v2 形式）には秘密を含まないメタ情報のみを保持します（旧 v1 平文トークンがある場合は起動時に自動移行・消去）。
+  - **管理画面での接続管理 & 資格情報保管**: 管理画面の「外部サービス接続（SaaS 連携）」パネルから公式印・送信先（`base_url` / `allowed_hosts`）を確認しながら接続の追加・編集（トークン差し替え）・削除・接続テストを行えます。API トークン等の秘密情報は Windows 資格情報マネージャー（`DesktopDashboards:connection:<connection_id>:<credential_key>`）へ保管・削除され、`%APPDATA%\DesktopDashboards\connections.json`（v2 形式）には秘密を含まないメタ情報のみを保持します（旧 v1 平文トークンがある場合は起動時に自動移行・消去）。
 
 ## 技術スタック
 

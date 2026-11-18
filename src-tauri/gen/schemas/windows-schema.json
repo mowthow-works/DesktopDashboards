@@ -369,6 +369,12 @@
           "markdownDescription": "Enables the dd_storage_set command without any pre-configured scope."
         },
         {
+          "description": "Enables the delete_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-connection",
+          "markdownDescription": "Enables the delete_connection command without any pre-configured scope."
+        },
+        {
           "description": "Enables the delete_widget command without any pre-configured scope.",
           "type": "string",
           "const": "allow-delete-widget",
@@ -391,6 +397,18 @@
           "type": "string",
           "const": "allow-get-webview-data-dir",
           "markdownDescription": "Enables the get_webview_data_dir command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-connections",
+          "markdownDescription": "Enables the list_connections command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_connectors command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-connectors",
+          "markdownDescription": "Enables the list_connectors command without any pre-configured scope."
         },
         {
           "description": "Enables the list_widgets command without any pre-configured scope.",
@@ -417,10 +435,22 @@
           "markdownDescription": "Enables the reset_widget_position command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-connection",
+          "markdownDescription": "Enables the save_connection command without any pre-configured scope."
+        },
+        {
           "description": "Enables the set_autostart command without any pre-configured scope.",
           "type": "string",
           "const": "allow-set-autostart",
           "markdownDescription": "Enables the set_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the test_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-test-connection",
+          "markdownDescription": "Enables the test_connection command without any pre-configured scope."
         },
         {
           "description": "Enables the toggle_widget command without any pre-configured scope.",
@@ -471,6 +501,12 @@
           "markdownDescription": "Denies the dd_storage_set command without any pre-configured scope."
         },
         {
+          "description": "Denies the delete_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-connection",
+          "markdownDescription": "Denies the delete_connection command without any pre-configured scope."
+        },
+        {
           "description": "Denies the delete_widget command without any pre-configured scope.",
           "type": "string",
           "const": "deny-delete-widget",
@@ -493,6 +529,18 @@
           "type": "string",
           "const": "deny-get-webview-data-dir",
           "markdownDescription": "Denies the get_webview_data_dir command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-connections",
+          "markdownDescription": "Denies the list_connections command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_connectors command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-connectors",
+          "markdownDescription": "Denies the list_connectors command without any pre-configured scope."
         },
         {
           "description": "Denies the list_widgets command without any pre-configured scope.",
@@ -519,10 +567,22 @@
           "markdownDescription": "Denies the reset_widget_position command without any pre-configured scope."
         },
         {
+          "description": "Denies the save_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-connection",
+          "markdownDescription": "Denies the save_connection command without any pre-configured scope."
+        },
+        {
           "description": "Denies the set_autostart command without any pre-configured scope.",
           "type": "string",
           "const": "deny-set-autostart",
           "markdownDescription": "Denies the set_autostart command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the test_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-test-connection",
+          "markdownDescription": "Denies the test_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the toggle_widget command without any pre-configured scope.",

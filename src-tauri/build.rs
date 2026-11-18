@@ -44,6 +44,11 @@ fn main() {
                 "dd_storage_get",
                 "dd_storage_set",
                 "dd_connect_request",
+                "list_connectors",
+                "list_connections",
+                "save_connection",
+                "delete_connection",
+                "test_connection",
             ]),
         )
         .windows_attributes(tauri_build::WindowsAttributes::new().app_manifest(WINDOWS_APP_MANIFEST));

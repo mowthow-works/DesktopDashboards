@@ -419,6 +419,19 @@
     </div>
 
     <div class="field">
+      <label for="input-connection-id">接続 ID（Connection ID / 管理画面で登録した接続名）</label>
+      <input
+        type="text"
+        id="input-connection-id"
+        value="notion"
+        placeholder="例: notion / my-notion"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="field-hint">保存キー: <code>notion:connection_id</code></div>
+    </div>
+
+    <div class="field">
       <label for="input-db-id">Database ID（Notion DB URL または ハイフンあり/なし ID）</label>
       <input
         type="text"
@@ -541,15 +554,18 @@
 
   <script>
     (() => {
+      const KEY_CONNECTION_ID = "notion:connection_id";
       const KEY_DATABASE_ID = "notion:database_id";
       const KEY_DATE_PROPERTY = "notion:date_property";
       const CACHE_KEY_PREFIX = "notion:data_source_id:";
+      const DEFAULT_CONNECTION_ID = "notion";
       const DEFAULT_DATE_PROPERTY = "日付";
 
       const ddStatusEl = document.getElementById("dd-status");
       const localTodayEl = document.getElementById("local-today");
       const headerBadgeEl = document.getElementById("header-badge");
       const settingsBadgeEl = document.getElementById("settings-badge");
+      const connectionIdInput = document.getElementById("input-connection-id");
       const dbIdInput = document.getElementById("input-db-id");
       const datePropInput = document.getElementById("input-date-prop");
       const normalizedDbIdEl = document.getElementById("normalized-db-id");
@@ -995,8 +1011,15 @@
           return;
         }
         try {
+          const savedConnId = await window.DD.storage.get(KEY_CONNECTION_ID);
           const savedDbId = await window.DD.storage.get(KEY_DATABASE_ID);
           const savedDateProp = await window.DD.storage.get(KEY_DATE_PROPERTY);
+
+          if (typeof savedConnId === "string" && savedConnId.trim() !== "") {
+            connectionIdInput.value = savedConnId.trim();
+          } else {
+            connectionIdInput.value = DEFAULT_CONNECTION_ID;
+          }
 
           if (typeof savedDbId === "string" && savedDbId.trim() !== "") {
             dbIdInput.value = normalizeDatabaseId(savedDbId);
@@ -1021,24 +1044,27 @@
 
       async function saveSettings() {
         if (!requireBridgeOrNotify()) return;
+        const connId = connectionIdInput.value.trim() || DEFAULT_CONNECTION_ID;
         const dbId = normalizeDatabaseId(dbIdInput.value);
         const dateProp = datePropInput.value.trim();
 
+        connectionIdInput.value = connId;
         dbIdInput.value = dbId;
         datePropInput.value = dateProp;
 
         setBusy(true);
         try {
+          await window.DD.storage.set(KEY_CONNECTION_ID, connId);
           await window.DD.storage.set(KEY_DATABASE_ID, dbId || null);
           await window.DD.storage.set(KEY_DATE_PROPERTY, dateProp);
           setBadge(settingsBadgeEl, "保存済み", "ok");
           await refreshCachedDataSourceDisplay();
           setBadge(resultBadgeEl, "設定保存", "ok");
           setMessageBanner(
-            `DD.storage に保存しました (${KEY_DATABASE_ID}=${dbId || "null"}, ${KEY_DATE_PROPERTY}="${dateProp}")`,
+            `DD.storage に保存しました (${KEY_CONNECTION_ID}="${connId}", ${KEY_DATABASE_ID}=${dbId || "null"}, ${KEY_DATE_PROPERTY}="${dateProp}")`,
             "ok"
           );
-          appendLog(`設定保存: dbId=${dbId || "(空)"}, dateProp="${dateProp}"`);
+          appendLog(`設定保存: connId="${connId}", dbId=${dbId || "(空)"}, dateProp="${dateProp}"`);
         } catch (err) {
           setBadge(settingsBadgeEl, "保存エラー", "err");
           setBadge(resultBadgeEl, "エラー", "err");
@@ -1047,6 +1073,17 @@
         } finally {
           setBusy(false);
         }
+      }
+
+      function getActiveConnectionIdOrNotify() {
+        const connId = connectionIdInput.value.trim();
+        if (!connId) {
+          clearRenderedDetails();
+          setBadge(resultBadgeEl, "入力不足", "warn");
+          setMessageBanner("接続 ID (Connection ID) を入力してください。", "err");
+          return null;
+        }
+        return connId;
       }
 
       async function clearDataSourceCache() {
@@ -1074,9 +1111,9 @@
         }
       }
 
-      async function fetchDatabaseAndExtractDataSourceId(dbId) {
+      async function fetchDatabaseAndExtractDataSourceId(connectionId, dbId) {
         const res = await window.DD.connect.request({
-          connection: "notion",
+          connection: connectionId,
           method: "GET",
           path: `/v1/databases/${encodeURIComponent(dbId)}`,
         });
@@ -1087,7 +1124,7 @@
       /**
        * data_source_id 解決 + クエリ実行（404 または object_not_found 時のみ1回再解決リトライ）
        */
-      async function queryDatabaseWithResolution({ dbId, queryBody, localDateLabel }) {
+      async function queryDatabaseWithResolution({ connectionId, dbId, queryBody, localDateLabel }) {
         const cacheKey = getCacheKey(dbId);
         let dataSourceId = await window.DD.storage.get(cacheKey);
         let cacheStatus = "HIT";
@@ -1096,7 +1133,7 @@
         if (typeof dataSourceId !== "string" || dataSourceId.trim() === "") {
           cacheStatus = "MISS";
           appendLog(`data_source_id キャッシュ MISS -> GET /v1/databases/${dbId}`);
-          const resolved = await fetchDatabaseAndExtractDataSourceId(dbId);
+          const resolved = await fetchDatabaseAndExtractDataSourceId(connectionId, dbId);
           if (!resolved.res.ok || !resolved.dataSourceId) {
             return {
               ok: false,
@@ -1117,7 +1154,7 @@
         }
 
         let queryRes = await window.DD.connect.request({
-          connection: "notion",
+          connection: connectionId,
           method: "POST",
           path: `/v1/data_sources/${encodeURIComponent(dataSourceId)}/query`,
           body: queryBody,
@@ -1131,7 +1168,7 @@
           appendLog(
             `クエリ応答 (${queryRes.status} / ${queryRes.data?.code || "-"}) -> data_source_id 再解決して1回リトライ`
           );
-          const refreshed = await fetchDatabaseAndExtractDataSourceId(dbId);
+          const refreshed = await fetchDatabaseAndExtractDataSourceId(connectionId, dbId);
           if (!refreshed.res.ok || !refreshed.dataSourceId) {
             return {
               ok: false,
@@ -1149,7 +1186,7 @@
           appendLog(`data_source_id 更新: ${dataSourceId}`);
 
           queryRes = await window.DD.connect.request({
-            connection: "notion",
+            connection: connectionId,
             method: "POST",
             path: `/v1/data_sources/${encodeURIComponent(dataSourceId)}/query`,
             body: queryBody,
@@ -1169,12 +1206,14 @@
 
       async function runConnectionTest() {
         if (!requireBridgeOrNotify()) return;
+        const connId = getActiveConnectionIdOrNotify();
+        if (!connId) return;
         clearRenderedDetails();
         setBusy(true);
-        appendLog("実行: ① 接続テスト GET /v1/users/me");
+        appendLog(`実行: ① 接続テスト GET /v1/users/me (connection=${connId})`);
         try {
           const res = await window.DD.connect.request({
-            connection: "notion",
+            connection: connId,
             method: "GET",
             path: "/v1/users/me",
           });
@@ -1225,6 +1264,8 @@
 
       async function runQueryAction(mode) {
         if (!requireBridgeOrNotify()) return;
+        const connId = getActiveConnectionIdOrNotify();
+        if (!connId) return;
         const dbId = updateDbIdPreview();
         if (!dbId) {
           clearRenderedDetails();
@@ -1258,10 +1299,11 @@
 
         clearRenderedDetails();
         setBusy(true);
-        appendLog(`実行: ${actionLabel}`);
+        appendLog(`実行: ${actionLabel} (connection=${connId})`);
 
         try {
           const outcome = await queryDatabaseWithResolution({
+            connectionId: connId,
             dbId,
             queryBody,
             localDateLabel: todayLocal,
@@ -1322,14 +1364,16 @@
 
       async function runNegativePatchTest() {
         if (!requireBridgeOrNotify()) return;
+        const connId = getActiveConnectionIdOrNotify();
+        if (!connId) return;
         clearRenderedDetails();
         setBusy(true);
         const todayLocal = getLocalTodayYmd();
-        appendLog("実行: ④ 負テスト PATCH /v1/pages/test");
+        appendLog(`実行: ④ 負テスト PATCH /v1/pages/test (connection=${connId})`);
 
         try {
           const res = await window.DD.connect.request({
-            connection: "notion",
+            connection: connId,
             method: "PATCH",
             path: "/v1/pages/test",
             body: { properties: {} },
@@ -1514,6 +1558,10 @@
           setBusy(false);
         }
       }
+
+      connectionIdInput.addEventListener("input", () => {
+        setBadge(settingsBadgeEl, "未保存変更", "warn");
+      });
 
       dbIdInput.addEventListener("input", () => {
         setBadge(settingsBadgeEl, "未保存変更", "warn");

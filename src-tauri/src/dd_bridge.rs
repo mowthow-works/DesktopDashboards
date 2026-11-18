@@ -2,14 +2,14 @@ use crate::config::{ConfigState, SourceType, WidgetConfig};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 const FORBIDDEN_URL_WIDGET_ERR: &str =
     "DD bridge is forbidden for URL widgets (SourceType::File required)";
@@ -145,6 +145,62 @@ pub struct ConnectionsFileV2 {
 pub struct ConnectionRecord {
     pub name: String,
     pub connector_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectorSummaryDto {
+    pub id: String,
+    pub name: String,
+    pub official: bool,
+    pub base_url: String,
+    pub allowed_hosts: Vec<String>,
+    pub credential_schema: Vec<CredentialField>,
+    pub test_method: String,
+    pub test_path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectionSummaryDto {
+    pub id: String,
+    pub name: String,
+    pub connector_id: String,
+    pub connector_name: String,
+    pub official: bool,
+    pub base_url: String,
+    pub allowed_hosts: Vec<String>,
+    pub has_secret: bool,
+    pub configured_keys: Vec<String>,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct SaveConnectionInput {
+    pub id: String,
+    pub name: String,
+    pub connector_id: String,
+    #[serde(default)]
+    pub credentials: BTreeMap<String, String>,
+}
+
+impl fmt::Debug for SaveConnectionInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SaveConnectionInput")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("connector_id", &self.connector_id)
+            .field("credentials", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TestConnectionResultDto {
+    pub connection_id: String,
+    pub connector_id: String,
+    pub ok: bool,
+    pub status: u16,
+    pub summary: String,
+    pub detail: String,
+    pub hint: Option<String>,
 }
 
 /// 資格情報ストア抽象トレイト（本番: `Win32CredentialStore` / テスト: `InMemoryCredentialStore`）。
@@ -454,6 +510,15 @@ pub fn verify_file_widget_caller_and_origin(
     let widget_id = verify_file_widget_caller(window_label, widgets)?;
     verify_widgetfile_origin(origin_header)?;
     Ok(widget_id)
+}
+
+/// 接続管理コマンドの呼び出し元が管理画面ウィンドウ (`"manager"`) のみであることを検証する。
+pub fn verify_manager_caller(window_label: &str) -> Result<(), String> {
+    if window_label == "manager" {
+        Ok(())
+    } else {
+        Err("connection management commands are only allowed from the manager window".to_string())
+    }
 }
 
 fn app_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1024,11 +1089,23 @@ pub fn verify_endpoint_intersection(
     }
     let method_upper = method.trim().to_ascii_uppercase();
 
-    let matching_grants: Vec<&WidgetConnectionGrant> = widget_manifest
+    let exact_grants: Vec<&WidgetConnectionGrant> = widget_manifest
         .connections
         .iter()
         .filter(|g| g.connection == connection)
         .collect();
+
+    let matching_grants: Vec<&WidgetConnectionGrant> = if !exact_grants.is_empty() {
+        exact_grants
+    } else {
+        widget_manifest
+            .connections
+            .iter()
+            .filter(|g| {
+                g.connection == "*" && g.connector.as_deref() == Some(connector.id.as_str())
+            })
+            .collect()
+    };
 
     let widget_rules: Vec<&EndpointRule> = if matching_grants.is_empty() {
         if widget_manifest.connections.is_empty() && !widget_manifest.endpoints.is_empty() {
@@ -1149,15 +1226,10 @@ fn is_clean_v2_connections_value(val: &Value) -> bool {
     })
 }
 
-/// `connections.json` の v2 テンプレート生成および v1（平文トークン保有）→ v2（秘密分離）自動移行を行う。
-pub fn migrate_and_ensure_connections(
+fn migrate_and_ensure_connections_unlocked(
     connections_path: &Path,
     cred_store: &dyn CredentialStore,
 ) -> Result<ConnectionsFileV2, String> {
-    let _guard = connections_lock()
-        .lock()
-        .map_err(|e| format!("connections lock poisoned: {e}"))?;
-
     if !connections_path.exists() {
         if let Some(parent) = connections_path.parent() {
             fs::create_dir_all(parent)
@@ -1260,6 +1332,17 @@ pub fn migrate_and_ensure_connections(
     json.push('\n');
     write_text_atomic(connections_path, &json)?;
     Ok(v2)
+}
+
+/// `connections.json` の v2 テンプレート生成および v1（平文トークン保有）→ v2（秘密分離）自動移行を行う。
+pub fn migrate_and_ensure_connections(
+    connections_path: &Path,
+    cred_store: &dyn CredentialStore,
+) -> Result<ConnectionsFileV2, String> {
+    let _guard = connections_lock()
+        .lock()
+        .map_err(|e| format!("connections lock poisoned: {e}"))?;
+    migrate_and_ensure_connections_unlocked(connections_path, cred_store)
 }
 
 /// アプリ起動時に `connections.json` v2 の作成・v1 からの自動移行を実行する。
@@ -1497,6 +1580,514 @@ pub async fn dd_connect_request(
     };
 
     Ok(ConnectResponse { status, ok, data })
+}
+
+fn collect_connector_credential_keys(connector: &ConnectorManifest) -> (Vec<String>, Vec<String>) {
+    let mut all_keys = Vec::new();
+    let mut seen_all = HashSet::new();
+    let auth_key = connector.auth.credential_key().to_string();
+    seen_all.insert(auth_key.clone());
+    all_keys.push(auth_key.clone());
+
+    let mut required_keys = Vec::new();
+    let mut seen_req = HashSet::new();
+    seen_req.insert(auth_key.clone());
+    required_keys.push(auth_key);
+
+    for field in &connector.credential_schema {
+        if seen_all.insert(field.key.clone()) {
+            all_keys.push(field.key.clone());
+        }
+        if field.required && seen_req.insert(field.key.clone()) {
+            required_keys.push(field.key.clone());
+        }
+    }
+
+    (all_keys, required_keys)
+}
+
+fn build_connection_summary(
+    id: &str,
+    record: &ConnectionRecord,
+    connectors: &BTreeMap<String, ConnectorManifest>,
+    cred_store: &dyn CredentialStore,
+) -> Result<ConnectionSummaryDto, String> {
+    if let Some(connector) = connectors.get(&record.connector_id) {
+        let (all_keys, required_keys) = collect_connector_credential_keys(connector);
+        let mut configured_keys = Vec::new();
+        for key in &all_keys {
+            let target = credential_target_name(id, key);
+            if let Some(secret) = cred_store.get_secret(&target)? {
+                if !is_dummy_or_empty_token(&secret) {
+                    configured_keys.push(key.clone());
+                }
+            }
+        }
+        let has_secret = !required_keys.is_empty()
+            && required_keys
+                .iter()
+                .all(|req| configured_keys.iter().any(|cfg_key| cfg_key == req));
+
+        Ok(ConnectionSummaryDto {
+            id: id.to_string(),
+            name: record.name.clone(),
+            connector_id: record.connector_id.clone(),
+            connector_name: connector.name.clone(),
+            official: connector.official,
+            base_url: connector.base_url.clone(),
+            allowed_hosts: connector.allowed_hosts.clone(),
+            has_secret,
+            configured_keys,
+        })
+    } else {
+        Ok(ConnectionSummaryDto {
+            id: id.to_string(),
+            name: record.name.clone(),
+            connector_id: record.connector_id.clone(),
+            connector_name: record.connector_id.clone(),
+            official: false,
+            base_url: String::new(),
+            allowed_hosts: Vec::new(),
+            has_secret: false,
+            configured_keys: Vec::new(),
+        })
+    }
+}
+
+pub fn summarize_connectors(
+    connectors: &BTreeMap<String, ConnectorManifest>,
+) -> Vec<ConnectorSummaryDto> {
+    let mut list: Vec<ConnectorSummaryDto> = connectors
+        .values()
+        .map(|c| ConnectorSummaryDto {
+            id: c.id.clone(),
+            name: c.name.clone(),
+            official: c.official,
+            base_url: c.base_url.clone(),
+            allowed_hosts: c.allowed_hosts.clone(),
+            credential_schema: c.credential_schema.clone(),
+            test_method: c.test.method.trim().to_ascii_uppercase(),
+            test_path: c.test.path.clone(),
+        })
+        .collect();
+    list.sort_by(|a, b| (!a.official).cmp(&(!b.official)).then_with(|| a.id.cmp(&b.id)));
+    list
+}
+
+pub fn list_connections_with_store(
+    connections_path: &Path,
+    connectors: &BTreeMap<String, ConnectorManifest>,
+    cred_store: &dyn CredentialStore,
+) -> Result<Vec<ConnectionSummaryDto>, String> {
+    let v2 = migrate_and_ensure_connections(connections_path, cred_store)?;
+    let mut out = Vec::with_capacity(v2.connections.len());
+    for (id, record) in &v2.connections {
+        out.push(build_connection_summary(id, record, connectors, cred_store)?);
+    }
+    Ok(out)
+}
+
+pub fn save_connection_with_store(
+    connections_path: &Path,
+    connectors: &BTreeMap<String, ConnectorManifest>,
+    cred_store: &dyn CredentialStore,
+    input: &SaveConnectionInput,
+) -> Result<ConnectionSummaryDto, String> {
+    let id = input.id.trim();
+    if !is_safe_identifier(id) {
+        return Err(
+            "接続 ID は空欄不可で、英数字・ハイフン(-)・アンダースコア(_)のみ使用できます"
+                .to_string(),
+        );
+    }
+
+    let connector_id = input.connector_id.trim();
+    let connector = connectors
+        .get(connector_id)
+        .ok_or_else(|| format!("unknown connector_id: {connector_id}"))?;
+
+    let name = if input.name.trim().is_empty() {
+        connector.name.clone()
+    } else {
+        input.name.trim().to_string()
+    };
+
+    let mut pending_secrets: Vec<(String, String)> = Vec::new();
+    for (key, val) in &input.credentials {
+        if !is_safe_identifier(key) {
+            return Err(format!("invalid credential key '{key}'"));
+        }
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            if is_dummy_or_empty_token(trimmed) {
+                return Err(
+                    "ダミートークンは保存できません。実際のトークンを入力してください".to_string(),
+                );
+            }
+            pending_secrets.push((key.clone(), trimmed.to_string()));
+        }
+    }
+
+    let _guard = connections_lock()
+        .lock()
+        .map_err(|e| format!("connections lock poisoned: {e}"))?;
+
+    let mut v2 = migrate_and_ensure_connections_unlocked(connections_path, cred_store)?;
+
+    let (_, required_keys) = collect_connector_credential_keys(connector);
+    for req_key in &required_keys {
+        let provided_now = pending_secrets.iter().any(|(k, _)| k == req_key);
+        if !provided_now {
+            let target = credential_target_name(id, req_key);
+            let existing_valid = cred_store
+                .get_secret(&target)?
+                .map(|s| !is_dummy_or_empty_token(&s))
+                .unwrap_or(false);
+            if !existing_valid {
+                return Err("必須の認証情報（トークン等）を入力してください".to_string());
+            }
+        }
+    }
+
+    for (key, secret) in &pending_secrets {
+        let target = credential_target_name(id, key);
+        cred_store.set_secret(&target, secret)?;
+    }
+
+    for req_key in &required_keys {
+        let target = credential_target_name(id, req_key);
+        let valid_after = cred_store
+            .get_secret(&target)?
+            .map(|s| !is_dummy_or_empty_token(&s))
+            .unwrap_or(false);
+        if !valid_after {
+            return Err("必須の認証情報（トークン等）を入力してください".to_string());
+        }
+    }
+
+    let record = ConnectionRecord {
+        name,
+        connector_id: connector_id.to_string(),
+    };
+    v2.connections.insert(id.to_string(), record.clone());
+
+    let mut json = serde_json::to_string_pretty(&v2)
+        .map_err(|e| format!("failed to serialize connections.json: {e}"))?;
+    json.push('\n');
+    write_text_atomic(connections_path, &json)?;
+
+    build_connection_summary(id, &record, connectors, cred_store)
+}
+
+pub fn delete_connection_with_store(
+    connections_path: &Path,
+    connectors: &BTreeMap<String, ConnectorManifest>,
+    cred_store: &dyn CredentialStore,
+    id: &str,
+) -> Result<(), String> {
+    let trimmed_id = id.trim();
+    if !is_safe_identifier(trimmed_id) {
+        return Err("invalid connection id".to_string());
+    }
+
+    let removed_record = {
+        let _guard = connections_lock()
+            .lock()
+            .map_err(|e| format!("connections lock poisoned: {e}"))?;
+        let mut v2 = migrate_and_ensure_connections_unlocked(connections_path, cred_store)?;
+        let Some(removed) = v2.connections.remove(trimmed_id) else {
+            return Err(format!("connection '{trimmed_id}' not found"));
+        };
+        let mut json = serde_json::to_string_pretty(&v2)
+            .map_err(|e| format!("failed to serialize connections.json: {e}"))?;
+        json.push('\n');
+        write_text_atomic(connections_path, &json)?;
+        removed
+    };
+
+    let mut keys_to_delete = BTreeSet::new();
+    keys_to_delete.insert("token".to_string());
+    if let Some(connector) = connectors.get(&removed_record.connector_id) {
+        let (all_keys, _) = collect_connector_credential_keys(connector);
+        for k in all_keys {
+            keys_to_delete.insert(k);
+        }
+    }
+
+    for key in keys_to_delete {
+        let target = credential_target_name(trimmed_id, &key);
+        cred_store.delete_secret(&target)?;
+    }
+
+    Ok(())
+}
+
+pub fn evaluate_test_response(
+    connection_id: &str,
+    connector_id: &str,
+    status: u16,
+    body_text: &str,
+) -> TestConnectionResultDto {
+    let parsed = if body_text.trim().is_empty() {
+        None
+    } else {
+        serde_json::from_str::<Value>(body_text).ok()
+    };
+
+    if (200..300).contains(&status) {
+        let summary = format!("接続成功 (HTTP {status})");
+        let detail = if let Some(val) = &parsed {
+            let name = val
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            let kind = val
+                .get("type")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            let obj_id = val
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+
+            match (name, kind, obj_id) {
+                (Some(n), Some(k), _) if connector_id == "notion" => {
+                    format!("Bot名: {n} (type: {k})")
+                }
+                (Some(n), Some(k), _) => format!("{n} (type: {k})"),
+                (Some(n), None, _) => n.to_string(),
+                (None, _, Some(oid)) => format!("ID: {oid}"),
+                _ => "疎通確認に成功しました。".to_string(),
+            }
+        } else {
+            "疎通確認に成功しました。".to_string()
+        };
+
+        let hint = if connector_id == "notion" {
+            Some(
+                "DB を参照するには、Notion 側の対象データベースの「⋯」→「コネクト」でこのインテグレーションを追加してください。"
+                    .to_string(),
+            )
+        } else {
+            None
+        };
+
+        return TestConnectionResultDto {
+            connection_id: connection_id.to_string(),
+            connector_id: connector_id.to_string(),
+            ok: true,
+            status,
+            summary,
+            detail,
+            hint,
+        };
+    }
+
+    let code = parsed
+        .as_ref()
+        .and_then(|v| v.get("code"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let message = parsed
+        .as_ref()
+        .and_then(|v| v.get("message"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+
+    let detail = match (!code.is_empty(), !message.is_empty()) {
+        (true, true) => format!("[{code}] {message}"),
+        (false, true) => message.to_string(),
+        (true, false) => format!("[{code}]"),
+        (false, false) => format!("HTTP {status} エラーが返されました。"),
+    };
+
+    let hint = if status == 401 || code == "unauthorized" {
+        Some(
+            "トークンが無効または取り消されている可能性があります。「編集」から正しいトークンに差し替えてください。"
+                .to_string(),
+        )
+    } else if status == 404 || code == "object_not_found" {
+        Some(
+            "対象のリソース／データベースが見つかりません。Notion 側の対象ページ・DB でこのインテグレーションが共有（コネクト追加）されているか確認してください。"
+                .to_string(),
+        )
+    } else if status == 403 || code == "restricted_resource" {
+        Some("インテグレーションの権限（Read content 等）が不足している可能性があります。".to_string())
+    } else {
+        None
+    };
+
+    TestConnectionResultDto {
+        connection_id: connection_id.to_string(),
+        connector_id: connector_id.to_string(),
+        ok: false,
+        status,
+        summary: format!("接続失敗 (HTTP {status})"),
+        detail,
+        hint,
+    }
+}
+
+#[tauri::command]
+pub fn list_connectors(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<ConnectorSummaryDto>, String> {
+    verify_manager_caller(window.label())?;
+    let connectors = load_connectors_for_app(&app);
+    Ok(summarize_connectors(&connectors))
+}
+
+#[tauri::command]
+pub fn list_connections(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<ConnectionSummaryDto>, String> {
+    verify_manager_caller(window.label())?;
+    let conn_path = connections_file_path(&app)?;
+    let connectors = load_connectors_for_app(&app);
+    list_connections_with_store(&conn_path, &connectors, &Win32CredentialStore)
+}
+
+#[tauri::command]
+pub fn save_connection(
+    app: AppHandle,
+    window: WebviewWindow,
+    input: SaveConnectionInput,
+) -> Result<ConnectionSummaryDto, String> {
+    verify_manager_caller(window.label())?;
+    let conn_path = connections_file_path(&app)?;
+    let connectors = load_connectors_for_app(&app);
+    let summary = save_connection_with_store(&conn_path, &connectors, &Win32CredentialStore, &input)?;
+    let _ = app.emit("connections-updated", ());
+    Ok(summary)
+}
+
+#[tauri::command]
+pub fn delete_connection(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<(), String> {
+    verify_manager_caller(window.label())?;
+    let conn_path = connections_file_path(&app)?;
+    let connectors = load_connectors_for_app(&app);
+    delete_connection_with_store(&conn_path, &connectors, &Win32CredentialStore, &id)?;
+    let _ = app.emit("connections-updated", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_connection(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<TestConnectionResultDto, String> {
+    verify_manager_caller(window.label())?;
+    let conn_id = id.trim().to_string();
+    if !is_safe_identifier(&conn_id) {
+        return Err("invalid connection id".to_string());
+    }
+
+    let conn_path = connections_file_path(&app)?;
+    let cred_store = Win32CredentialStore;
+    let v2 = migrate_and_ensure_connections(&conn_path, &cred_store)?;
+    let conn_record = v2
+        .connections
+        .get(&conn_id)
+        .ok_or_else(|| format!("connection '{conn_id}' not found"))?;
+
+    let connectors = load_connectors_for_app(&app);
+    let connector = connectors.get(&conn_record.connector_id).ok_or_else(|| {
+        format!(
+            "connector '{}' not found for connection '{conn_id}'",
+            conn_record.connector_id
+        )
+    })?;
+
+    let cred_key = connector.auth.credential_key();
+    let target_name = credential_target_name(&conn_id, cred_key);
+    let Some(secret) = cred_store
+        .get_secret(&target_name)?
+        .map(|s| s.trim().to_string())
+        .filter(|s| !is_dummy_or_empty_token(s))
+    else {
+        return Ok(TestConnectionResultDto {
+            connection_id: conn_id,
+            connector_id: connector.id.clone(),
+            ok: false,
+            status: 0,
+            summary: "認証情報未設定".to_string(),
+            detail: "Windows 資格情報マネージャーにトークンが登録されていません。".to_string(),
+            hint: Some("「編集」からトークンを設定してください。".to_string()),
+        });
+    };
+
+    verify_request_path_safety(&connector.test.path)?;
+    let target_url = format!(
+        "{}{}",
+        connector.base_url.trim_end_matches('/'),
+        connector.test.path
+    );
+    let parsed_target =
+        url::Url::parse(&target_url).map_err(|e| format!("invalid target URL: {e}"))?;
+    if parsed_target.scheme() != "https" {
+        return Err("target URL must use https scheme".to_string());
+    }
+    let Some(host) = parsed_target.host_str() else {
+        return Err("target URL is missing host".to_string());
+    };
+    if !connector
+        .allowed_hosts
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(host))
+    {
+        return Err(format!(
+            "target host '{host}' is not allowed for connector '{}'",
+            connector.id
+        ));
+    }
+
+    let method_upper = connector.test.method.trim().to_ascii_uppercase();
+    let method = reqwest::Method::from_bytes(method_upper.as_bytes())
+        .map_err(|e| format!("invalid HTTP method: {e}"))?;
+    let headers = build_request_headers(connector, &secret)?;
+
+    let response = match http_client()
+        .request(method, &target_url)
+        .headers(headers)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            return Ok(TestConnectionResultDto {
+                connection_id: conn_id,
+                connector_id: connector.id.clone(),
+                ok: false,
+                status: 0,
+                summary: "通信エラー".to_string(),
+                detail: format!("HTTP request failed: {}", e.without_url()),
+                hint: Some("ネットワーク接続やプロキシ設定を確認してください。".to_string()),
+            });
+        }
+    };
+
+    let status = response.status().as_u16();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|e| format!("failed to read HTTP response body: {e}"))?;
+
+    Ok(evaluate_test_response(
+        &conn_id,
+        &connector.id,
+        status,
+        &body_text,
+    ))
 }
 
 #[cfg(test)]
@@ -2093,5 +2684,369 @@ mod tests {
 
         // 奇数長などの UTF-8 バイト列は UTF-8 フォールバックで読める
         assert_eq!(decode_credential_blob(b"abc").unwrap(), "abc");
+    }
+
+    #[test]
+    fn verify_manager_caller_allows_only_manager() {
+        assert!(verify_manager_caller("manager").is_ok());
+
+        for bad in ["widget-123", "widget-file-widget-1", "", "other"] {
+            let err = verify_manager_caller(bad).unwrap_err();
+            assert_eq!(
+                err,
+                "connection management commands are only allowed from the manager window"
+            );
+        }
+    }
+
+    #[test]
+    fn default_capability_has_connection_management_and_widgets_exclude_it() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let default_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("default.json")).unwrap(),
+        )
+        .unwrap();
+        let widgets_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets.json")).unwrap(),
+        )
+        .unwrap();
+        let widgets_dd_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets-dd.json")).unwrap(),
+        )
+        .unwrap();
+
+        let mgmt_perms = [
+            "allow-list-connectors",
+            "allow-list-connections",
+            "allow-save-connection",
+            "allow-delete-connection",
+            "allow-test-connection",
+        ];
+
+        assert_eq!(default_cap.get("windows"), Some(&json!(["manager"])));
+        let default_perms = default_cap
+            .get("permissions")
+            .and_then(Value::as_array)
+            .unwrap();
+        for perm in mgmt_perms {
+            assert!(
+                default_perms.iter().any(|p| p.as_str() == Some(perm)),
+                "default.json missing {perm}"
+            );
+        }
+
+        for (name, cap) in [("widgets.json", &widgets_cap), ("widgets-dd.json", &widgets_dd_cap)] {
+            let perms = cap.get("permissions").and_then(Value::as_array).unwrap();
+            for perm in mgmt_perms {
+                assert!(
+                    !perms.iter().any(|p| p.as_str() == Some(perm)),
+                    "{name} must not expose {perm}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn save_connection_input_debug_redacts_credentials() {
+        let mut creds = BTreeMap::new();
+        let secret = "ntn_super_secret_do_not_leak_42";
+        creds.insert("token".to_string(), secret.to_string());
+        let input = SaveConnectionInput {
+            id: "notion_work".to_string(),
+            name: "Notion Work".to_string(),
+            connector_id: "notion".to_string(),
+            credentials: creds,
+        };
+        let debug_str = format!("{input:?}");
+        assert!(!debug_str.contains(secret));
+        assert!(debug_str.contains("[REDACTED]"));
+        assert!(debug_str.contains("notion_work"));
+    }
+
+    #[test]
+    fn connection_management_save_list_update_delete_lifecycle() {
+        let dir = std::env::temp_dir().join(format!("dd_conn_mgmt_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let conn_path = dir.join("connections.json");
+        let spike_html = dir.join("notion-spike.html");
+        fs::write(&spike_html, "<html></html>").unwrap();
+        fs::write(
+            dir.join("notion-spike.manifest.json"),
+            r#"{
+  "id": "notion-spike",
+  "name": "Notion Spike",
+  "entry": "notion-spike.html",
+  "connections": [
+    {
+      "connection": "*",
+      "connector": "notion",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/users/me" }
+      ]
+    }
+  ]
+}"#,
+        )
+        .unwrap();
+
+        let connectors = load_connectors_from_dirs(&[], None);
+        let cred_store = InMemoryCredentialStore::default();
+
+        // 1) 必須トークン未入力・ダミートークンは拒否され、connections.json へ不完全な接続を作らない
+        let dummy_input = SaveConnectionInput {
+            id: "notion_work".to_string(),
+            name: "Work Notion".to_string(),
+            connector_id: "notion".to_string(),
+            credentials: BTreeMap::from([("token".to_string(), "ntn_DUMMY_123".to_string())]),
+        };
+        assert!(
+            save_connection_with_store(&conn_path, &connectors, &cred_store, &dummy_input)
+                .is_err()
+        );
+        let empty_input = SaveConnectionInput {
+            id: "notion_work".to_string(),
+            name: "Work Notion".to_string(),
+            connector_id: "notion".to_string(),
+            credentials: BTreeMap::new(),
+        };
+        assert!(
+            save_connection_with_store(&conn_path, &connectors, &cred_store, &empty_input)
+                .is_err()
+        );
+        let initial_list =
+            list_connections_with_store(&conn_path, &connectors, &cred_store).unwrap();
+        assert!(!initial_list.iter().any(|c| c.id == "notion_work"));
+
+        // 2) 有効トークンで新規保存
+        let secret_1 = "ntn_work_secret_v1_111";
+        let valid_input = SaveConnectionInput {
+            id: "notion_work".to_string(),
+            name: "Work Notion".to_string(),
+            connector_id: "notion".to_string(),
+            credentials: BTreeMap::from([("token".to_string(), secret_1.to_string())]),
+        };
+        let saved =
+            save_connection_with_store(&conn_path, &connectors, &cred_store, &valid_input).unwrap();
+        assert_eq!(saved.id, "notion_work");
+        assert_eq!(saved.name, "Work Notion");
+        assert!(saved.official);
+        assert!(saved.has_secret);
+        assert_eq!(saved.configured_keys, vec!["token".to_string()]);
+        assert_eq!(saved.base_url, "https://api.notion.com");
+
+        // 3) list_connections_with_store で一覧取得でき、connections.json には平文トークンなし
+        let listed = list_connections_with_store(&conn_path, &connectors, &cred_store).unwrap();
+        assert_eq!(listed.len(), 2);
+        let conn_json_text = fs::read_to_string(&conn_path).unwrap();
+        assert!(!conn_json_text.contains(secret_1));
+
+        // 4) トークン空欄で編集保存すると既存トークンを維持しつつ名前のみ更新
+        let rename_only = SaveConnectionInput {
+            id: "notion_work".to_string(),
+            name: "Work Notion Renamed".to_string(),
+            connector_id: "notion".to_string(),
+            credentials: BTreeMap::from([("token".to_string(), "".to_string())]),
+        };
+        let renamed =
+            save_connection_with_store(&conn_path, &connectors, &cred_store, &rename_only).unwrap();
+        assert_eq!(renamed.name, "Work Notion Renamed");
+        assert!(renamed.has_secret);
+        assert_eq!(
+            cred_store
+                .get_secret("DesktopDashboards:connection:notion_work:token")
+                .unwrap(),
+            Some(secret_1.to_string())
+        );
+
+        // 5) トークン差し替え更新
+        let secret_2 = "ntn_work_secret_v2_222";
+        let rotate_input = SaveConnectionInput {
+            id: "notion_work".to_string(),
+            name: "Work Notion Renamed".to_string(),
+            connector_id: "notion".to_string(),
+            credentials: BTreeMap::from([("token".to_string(), secret_2.to_string())]),
+        };
+        save_connection_with_store(&conn_path, &connectors, &cred_store, &rotate_input).unwrap();
+        assert_eq!(
+            cred_store
+                .get_secret("DesktopDashboards:connection:notion_work:token")
+                .unwrap(),
+            Some(secret_2.to_string())
+        );
+
+        // 6) 削除すると connections.json と CredentialStore の両方から消え、prepare_connect_request も拒否
+        delete_connection_with_store(&conn_path, &connectors, &cred_store, "notion_work").unwrap();
+        assert_eq!(
+            cred_store
+                .get_secret("DesktopDashboards:connection:notion_work:token")
+                .unwrap(),
+            None
+        );
+        let req_deleted = ConnectRequest {
+            connection: "notion_work".to_string(),
+            method: "GET".to_string(),
+            path: "/v1/users/me".to_string(),
+            body: None,
+        };
+        let prep_err = prepare_connect_request(
+            &spike_html,
+            &conn_path,
+            &connectors,
+            &cred_store,
+            &req_deleted,
+        )
+        .err()
+        .unwrap();
+        assert!(prep_err.contains("not configured in connections.json"));
+
+        // 7) 残りの notion も削除し全件空にした後、migrate_and_ensure_connections / list_connections で勝手に復活しないこと
+        delete_connection_with_store(&conn_path, &connectors, &cred_store, "notion").unwrap();
+        let empty_list =
+            list_connections_with_store(&conn_path, &connectors, &cred_store).unwrap();
+        assert!(empty_list.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn endpoint_intersection_supports_wildcard_connection_with_matching_connector() {
+        let notion = parse_and_validate_connector(BUILTIN_NOTION_CONNECTOR_JSON).unwrap();
+        let other_conn = parse_and_validate_connector(
+            r#"{
+  "id": "other_service",
+  "name": "Other",
+  "official": false,
+  "base_url": "https://api.other.example",
+  "allowed_hosts": ["api.other.example"],
+  "auth": { "type": "bearer", "credential_key": "token" },
+  "test": { "method": "GET", "path": "/v1/users/me" },
+  "endpoints": [{ "method": "GET", "path": "/v1/users/me" }]
+}"#,
+        )
+        .unwrap();
+
+        let wildcard_widget = parse_and_validate_widget_manifest(
+            r#"{
+  "id": "notion-spike",
+  "name": "Notion Spike",
+  "entry": "notion-spike.html",
+  "connections": [
+    {
+      "connection": "*",
+      "connector": "notion",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/users/me" },
+        { "method": "GET", "path": "/v1/databases/*" },
+        { "method": "POST", "path": "/v1/data_sources/*/query" }
+      ]
+    },
+    {
+      "connection": "notion_limited",
+      "connector": "notion",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/users/me" }
+      ]
+    }
+  ]
+}"#,
+        )
+        .unwrap();
+
+        // 任意接続名 "my-notion" は wildcard ("*", connector: "notion") に一致し、読み取り3種許可・PATCH拒否
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &wildcard_widget,
+            "my-notion",
+            "GET",
+            "/v1/users/me"
+        )
+        .is_ok());
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &wildcard_widget,
+            "my-notion",
+            "GET",
+            "/v1/databases/db-1"
+        )
+        .is_ok());
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &wildcard_widget,
+            "my-notion",
+            "PATCH",
+            "/v1/pages/test"
+        )
+        .is_err());
+
+        // 完全一致 "notion_limited" がある場合はワイルドカードより完全一致が優先される
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &wildcard_widget,
+            "notion_limited",
+            "GET",
+            "/v1/users/me"
+        )
+        .is_ok());
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &wildcard_widget,
+            "notion_limited",
+            "GET",
+            "/v1/databases/db-1"
+        )
+        .is_err());
+
+        // connector が "notion" 以外の場合はワイルドカードに一致しない
+        assert!(verify_endpoint_intersection(
+            &other_conn,
+            &wildcard_widget,
+            "my-other",
+            "GET",
+            "/v1/users/me"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn evaluate_test_response_formats_success_and_error_hints() {
+        let ok_res = evaluate_test_response(
+            "notion",
+            "notion",
+            200,
+            r#"{"object":"user","id":"u1","name":"DesktopBot","type":"bot"}"#,
+        );
+        assert!(ok_res.ok);
+        assert_eq!(ok_res.status, 200);
+        assert!(ok_res.detail.contains("DesktopBot"));
+        assert!(ok_res.hint.as_deref().unwrap().contains("コネクト"));
+
+        let err_401 = evaluate_test_response(
+            "notion",
+            "notion",
+            401,
+            r#"{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}"#,
+        );
+        assert!(!err_401.ok);
+        assert_eq!(err_401.status, 401);
+        assert!(err_401.detail.contains("unauthorized"));
+        assert!(err_401.hint.as_deref().unwrap().contains("トークンが無効"));
+
+        let err_404 = evaluate_test_response(
+            "notion",
+            "notion",
+            404,
+            r#"{"object":"error","status":404,"code":"object_not_found","message":"Could not find database."}"#,
+        );
+        assert!(!err_404.ok);
+        assert!(err_404.hint.as_deref().unwrap().contains("共有（コネクト追加）"));
+
+        let err_403 = evaluate_test_response(
+            "notion",
+            "notion",
+            403,
+            r#"{"object":"error","status":403,"code":"restricted_resource","message":"Insufficient permissions."}"#,
+        );
+        assert!(!err_403.ok);
+        assert!(err_403.hint.as_deref().unwrap().contains("権限"));
     }
 }

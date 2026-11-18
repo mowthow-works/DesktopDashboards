@@ -64,7 +64,7 @@
       font-size: 11px;
       color: #94a3b8;
     }
-    input[type="text"], input[type="number"], select {
+    input[type="text"], input[type="password"], input[type="number"], select {
       width: 100%;
       padding: 8px 10px;
       border-radius: 6px;
@@ -272,6 +272,168 @@
       color: #64748b;
       word-break: break-all;
     }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .panel-head h2 {
+      margin: 0;
+    }
+    .guide-details {
+      background: #141820;
+      border: 1px solid #2b3341;
+      border-radius: 8px;
+      padding: 9px 12px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .guide-details summary {
+      cursor: pointer;
+      font-weight: 600;
+      user-select: none;
+      color: #93c5fd;
+    }
+    .guide-steps {
+      margin: 8px 0;
+      padding-left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .guide-actions {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .guide-link {
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .guide-link:hover {
+      text-decoration: underline;
+    }
+    .conn-form-box {
+      background: #141820;
+      border: 1px solid #2b3341;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .conn-form-box[hidden] {
+      display: none;
+    }
+    .conn-dest-box {
+      background: #0f1217;
+      border: 1px solid #334155;
+      border-left: 3px solid #38bdf8;
+      border-radius: 6px;
+      padding: 9px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .conn-dest-title {
+      font-weight: 600;
+      color: #7dd3fc;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .conn-dest-row {
+      font-size: 11px;
+      color: #94a3b8;
+      word-break: break-all;
+    }
+    .conn-cred-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .secret-input-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .secret-input-row input {
+      flex: 1;
+    }
+    .field-note {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .badge.official {
+      background: rgba(52, 211, 153, 0.16);
+      color: #6ee7b7;
+      border: 1px solid rgba(52, 211, 153, 0.35);
+    }
+    .badge.custom {
+      background: rgba(251, 191, 36, 0.15);
+      color: #fcd34d;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+    }
+    .badge.warn {
+      background: rgba(248, 113, 113, 0.16);
+      color: #fca5a5;
+      border: 1px solid rgba(248, 113, 113, 0.35);
+    }
+    .conn-test-result {
+      background: #0f1217;
+      border: 1px solid #2b3341;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      word-break: break-word;
+    }
+    .conn-test-result.ok {
+      border-color: rgba(52, 211, 153, 0.4);
+      background: rgba(52, 211, 153, 0.08);
+      color: #a7f3d0;
+    }
+    .conn-test-result.err {
+      border-color: rgba(248, 113, 113, 0.45);
+      background: rgba(248, 113, 113, 0.09);
+      color: #fecaca;
+    }
+    .conn-test-hint {
+      font-size: 11px;
+      color: #fde68a;
+    }
+    #conn-status {
+      font-size: 12px;
+      color: #34d399;
+      min-height: 18px;
+      margin-bottom: 8px;
+    }
+    #conn-status.error {
+      color: #f87171;
+    }
+    code {
+      font-family: Consolas, "Cascadia Code", monospace;
+      font-size: 11px;
+      background: #0f1217;
+      border: 1px solid #2b3444;
+      border-radius: 4px;
+      padding: 1px 4px;
+      color: #7dd3fc;
+    }
   </style>
 </head>
 <body>
@@ -309,6 +471,71 @@
   <section class="panel">
     <h2>登録済みガジェット一覧</h2>
     <div id="widget-list" class="widget-list"></div>
+  </section>
+
+  <section class="panel" id="connections-panel">
+    <div class="panel-head">
+      <h2>外部サービス接続（SaaS 連携）</h2>
+      <button type="button" class="primary" id="btn-toggle-conn-form">＋ 接続を追加</button>
+    </div>
+
+    <details class="guide-details">
+      <summary>📖 Notion 連携の設定手順（3ステップ）</summary>
+      <ol class="guide-steps">
+        <li>Notion の開発者画面（Internal Integrations）でインテグレーションを作成</li>
+        <li>発行されたシークレット（<code>ntn_...</code>）を下のフォームに入力して保存（Windows 資格情報マネージャーに暗号化保管されます）</li>
+        <li>Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト (Connections)</code> からインテグレーションを追加（※未共有だと <code>object_not_found</code> エラーになります）</li>
+      </ol>
+      <div class="guide-actions">
+        <a
+          href="https://www.notion.so/profile/integrations"
+          class="guide-link"
+          id="btn-open-notion-integrations"
+          rel="noopener noreferrer"
+        >Notion インテグレーション設定を開く ↗</a>
+      </div>
+    </details>
+
+    <div id="conn-form-box" class="conn-form-box" hidden>
+      <div class="panel-head" style="margin-bottom: 0;">
+        <strong id="conn-form-title">新しい外部サービス接続を追加</strong>
+        <button type="button" class="secondary" id="btn-cancel-conn-form">閉じる</button>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="field-label" for="conn-connector">コネクタ種別</label>
+          <select id="conn-connector"></select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="conn-id">接続 ID（例: notion, notion_work）</label>
+          <input id="conn-id" type="text" placeholder="例: notion" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="conn-name">表示名</label>
+          <input id="conn-name" type="text" placeholder="例: Notion（個人用）" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="conn-dest-box" id="conn-dest-box">
+        <div class="conn-dest-title">
+          <span>送信先・保管先確認</span>
+          <span class="badge" id="conn-dest-official-badge">-</span>
+        </div>
+        <div class="conn-dest-row">送信先 URL: <code id="conn-dest-base-url">-</code></div>
+        <div class="conn-dest-row">許可ホスト: <code id="conn-dest-allowed-hosts">-</code></div>
+        <div class="conn-dest-row">資格情報マネージャー保管キー: <code id="conn-dest-target-format">DesktopDashboards:connection:&lt;id&gt;:&lt;key&gt;</code></div>
+      </div>
+
+      <div id="conn-credentials-fields" class="conn-cred-fields"></div>
+
+      <div class="row" style="justify-content: flex-end; margin-bottom: 0;">
+        <button type="button" class="primary" id="btn-save-conn">接続を保存</button>
+      </div>
+    </div>
+
+    <div id="conn-status"></div>
+    <div id="connection-list" class="widget-list"></div>
   </section>
 
   <section class="panel">
@@ -731,12 +958,533 @@
       } catch (_) {}
     }
 
+    // --- 外部サービス接続（SaaS 連携）管理 ---
+    const openNotionGuideLink = document.getElementById("btn-open-notion-integrations");
+    const toggleConnFormBtn = document.getElementById("btn-toggle-conn-form");
+    const cancelConnFormBtn = document.getElementById("btn-cancel-conn-form");
+    const connFormBox = document.getElementById("conn-form-box");
+    const connFormTitle = document.getElementById("conn-form-title");
+    const connConnectorEl = document.getElementById("conn-connector");
+    const connIdEl = document.getElementById("conn-id");
+    const connNameEl = document.getElementById("conn-name");
+    const connDestOfficialBadge = document.getElementById("conn-dest-official-badge");
+    const connDestBaseUrl = document.getElementById("conn-dest-base-url");
+    const connDestAllowedHosts = document.getElementById("conn-dest-allowed-hosts");
+    const connDestTargetFormat = document.getElementById("conn-dest-target-format");
+    const connCredFieldsEl = document.getElementById("conn-credentials-fields");
+    const saveConnBtn = document.getElementById("btn-save-conn");
+    const connStatusEl = document.getElementById("conn-status");
+    const connectionListEl = document.getElementById("connection-list");
+
+    let connectorsCache = [];
+    let connectionsCache = [];
+    let editingConnectionId = null;
+    let lastAutoConnId = "";
+    let lastAutoConnName = "";
+
+    function setConnStatus(msg, isError = false) {
+      connStatusEl.textContent = msg;
+      connStatusEl.className = isError ? "error" : "";
+      if (msg) {
+        setStatus(msg, isError);
+      }
+    }
+
+    async function openExternalUrl(url) {
+      if (window.__TAURI__?.opener?.openUrl) {
+        await window.__TAURI__.opener.openUrl(url);
+        return;
+      }
+      await invoke("plugin:opener|open_url", { url });
+    }
+
+    openNotionGuideLink.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try {
+        await openExternalUrl("https://www.notion.so/profile/integrations");
+      } catch (err) {
+        setConnStatus(`外部ブラウザ起動エラー: ${err}`, true);
+      }
+    });
+
+    function getSelectedConnector() {
+      const selectedId = connConnectorEl.value;
+      return connectorsCache.find((c) => c.id === selectedId) || null;
+    }
+
+    function updateDestinationPreview() {
+      const connector = getSelectedConnector();
+      const rawId = connIdEl.value.trim();
+      const effectiveId = rawId || "<id>";
+
+      if (!connector) {
+        connDestOfficialBadge.textContent = "-";
+        connDestOfficialBadge.className = "badge";
+        connDestBaseUrl.textContent = "-";
+        connDestAllowedHosts.textContent = "-";
+        connDestTargetFormat.textContent = `DesktopDashboards:connection:${effectiveId}:<key>`;
+        return;
+      }
+
+      if (connector.official) {
+        connDestOfficialBadge.textContent = "✓ 公式 (Official)";
+        connDestOfficialBadge.className = "badge official";
+      } else {
+        connDestOfficialBadge.textContent = "カスタム";
+        connDestOfficialBadge.className = "badge custom";
+      }
+      connDestBaseUrl.textContent = connector.base_url || "-";
+      connDestAllowedHosts.textContent = Array.isArray(connector.allowed_hosts)
+        ? connector.allowed_hosts.join(", ")
+        : "-";
+
+      const schema = Array.isArray(connector.credential_schema) ? connector.credential_schema : [];
+      const keys = schema.map((f) => f.key).filter(Boolean);
+      const keyPreview = keys.length > 0
+        ? keys.map((k) => `DesktopDashboards:connection:${effectiveId}:${k}`).join(" / ")
+        : `DesktopDashboards:connection:${effectiveId}:<key>`;
+      connDestTargetFormat.textContent = keyPreview;
+    }
+
+    function renderCredentialSchemaFields(connector, existingConn = null) {
+      connCredFieldsEl.innerHTML = "";
+      if (!connector) return;
+
+      const schema = Array.isArray(connector.credential_schema) ? connector.credential_schema : [];
+      if (schema.length === 0) {
+        const note = document.createElement("div");
+        note.className = "field-note";
+        note.textContent = "このコネクタには追加の認証フィールド定義がありません。";
+        connCredFieldsEl.appendChild(note);
+        return;
+      }
+
+      const configuredKeys = new Set(existingConn?.configured_keys || []);
+      const isEdit = editingConnectionId !== null;
+
+      for (const field of schema) {
+        const wrap = document.createElement("div");
+        wrap.className = "field";
+
+        const label = document.createElement("label");
+        label.className = "field-label";
+        const inputId = `conn-cred-${field.key}`;
+        label.htmlFor = inputId;
+        const reqLabel = isEdit
+          ? (configuredKeys.has(field.key) ? "登録済み" : "未登録")
+          : (field.required ? "必須" : "任意");
+        label.textContent = `${field.label || field.key} (${field.key}) [${reqLabel}]`;
+        wrap.appendChild(label);
+
+        const row = document.createElement("div");
+        row.className = "secret-input-row";
+
+        const inp = document.createElement("input");
+        inp.id = inputId;
+        inp.type = field.type === "secret" ? "password" : "text";
+        inp.placeholder = field.placeholder || "";
+        inp.autocomplete = "off";
+        inp.spellcheck = false;
+        inp.required = !isEdit && Boolean(field.required);
+        inp.dataset.credKey = field.key;
+        inp.dataset.fieldType = field.type || "text";
+        row.appendChild(inp);
+
+        if (field.type === "secret") {
+          const toggleVisBtn = document.createElement("button");
+          toggleVisBtn.type = "button";
+          toggleVisBtn.className = "secondary";
+          toggleVisBtn.textContent = "表示";
+          toggleVisBtn.addEventListener("click", () => {
+            const isMasked = inp.type === "password";
+            inp.type = isMasked ? "text" : "password";
+            toggleVisBtn.textContent = isMasked ? "隠す" : "表示";
+          });
+          row.appendChild(toggleVisBtn);
+        }
+
+        wrap.appendChild(row);
+
+        if (isEdit) {
+          const hint = document.createElement("div");
+          hint.className = "field-note";
+          hint.textContent = "差し替える場合のみ入力（空欄なら既存の秘密を維持）";
+          wrap.appendChild(hint);
+        }
+
+        connCredFieldsEl.appendChild(wrap);
+      }
+    }
+
+    function clearCredentialInputs() {
+      const inputs = connCredFieldsEl.querySelectorAll("input[data-cred-key]");
+      for (const inp of inputs) {
+        inp.value = "";
+        if (inp.dataset.fieldType === "secret") {
+          inp.type = "password";
+          if (inp.nextElementSibling) {
+            inp.nextElementSibling.textContent = "表示";
+          }
+        }
+      }
+    }
+
+    function populateConnectorOptions(selectedConnectorId = null) {
+      connConnectorEl.innerHTML = "";
+      for (const c of connectorsCache) {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = `${c.name} (${c.official ? "公式" : "カスタム"})`;
+        connConnectorEl.appendChild(opt);
+      }
+      if (selectedConnectorId) {
+        if (!connectorsCache.some((c) => c.id === selectedConnectorId)) {
+          const opt = document.createElement("option");
+          opt.value = selectedConnectorId;
+          opt.textContent = `${selectedConnectorId} (定義未検出)`;
+          connConnectorEl.appendChild(opt);
+        }
+        connConnectorEl.value = selectedConnectorId;
+      } else if (connectorsCache.length > 0) {
+        connConnectorEl.value = connectorsCache[0].id;
+      }
+    }
+
+    function openConnectionFormForAdd() {
+      editingConnectionId = null;
+      connFormTitle.textContent = "新しい外部サービス接続を追加";
+      saveConnBtn.textContent = "接続を保存";
+      populateConnectorOptions();
+      connConnectorEl.disabled = false;
+      connIdEl.disabled = false;
+      connIdEl.readOnly = false;
+
+      const connector = getSelectedConnector();
+      const defaultId = connector ? connector.id : "";
+      const defaultName = connector ? connector.name : "";
+      connIdEl.value = defaultId;
+      connNameEl.value = defaultName;
+      lastAutoConnId = defaultId;
+      lastAutoConnName = defaultName;
+
+      updateDestinationPreview();
+      renderCredentialSchemaFields(connector, null);
+      connFormBox.hidden = false;
+    }
+
+    function openConnectionFormForEdit(conn) {
+      editingConnectionId = conn.id;
+      connFormTitle.textContent = `接続を編集: ${conn.id}`;
+      saveConnBtn.textContent = "変更を保存";
+      populateConnectorOptions(conn.connector_id);
+      connConnectorEl.disabled = true;
+      connIdEl.value = conn.id;
+      connIdEl.disabled = true;
+      connIdEl.readOnly = true;
+      connNameEl.value = conn.name || "";
+      lastAutoConnId = "";
+      lastAutoConnName = "";
+
+      const connector = getSelectedConnector();
+      updateDestinationPreview();
+      renderCredentialSchemaFields(connector, conn);
+      connFormBox.hidden = false;
+      const firstCredInput = connCredFieldsEl.querySelector("input[data-cred-key]");
+      if (firstCredInput) {
+        firstCredInput.focus();
+      }
+    }
+
+    function closeConnectionForm() {
+      clearCredentialInputs();
+      editingConnectionId = null;
+      connFormBox.hidden = true;
+    }
+
+    connConnectorEl.addEventListener("change", () => {
+      const connector = getSelectedConnector();
+      if (editingConnectionId === null && connector) {
+        const curId = connIdEl.value.trim();
+        if (!curId || curId === lastAutoConnId) {
+          connIdEl.value = connector.id;
+          lastAutoConnId = connector.id;
+        }
+        const curName = connNameEl.value.trim();
+        if (!curName || curName === lastAutoConnName) {
+          connNameEl.value = connector.name;
+          lastAutoConnName = connector.name;
+        }
+      }
+      updateDestinationPreview();
+      renderCredentialSchemaFields(connector, null);
+    });
+
+    connIdEl.addEventListener("input", () => {
+      updateDestinationPreview();
+    });
+
+    toggleConnFormBtn.addEventListener("click", async () => {
+      if (!connFormBox.hidden && editingConnectionId === null) {
+        closeConnectionForm();
+        return;
+      }
+      if (connectorsCache.length === 0) {
+        await refreshConnectors();
+      }
+      openConnectionFormForAdd();
+    });
+
+    cancelConnFormBtn.addEventListener("click", () => {
+      closeConnectionForm();
+    });
+
+    saveConnBtn.addEventListener("click", async () => {
+      const id = (editingConnectionId !== null ? editingConnectionId : connIdEl.value).trim();
+      const name = connNameEl.value.trim();
+      const connectorId = connConnectorEl.value;
+      if (!id) {
+        setConnStatus("接続 ID を入力してください。", true);
+        return;
+      }
+      if (!connectorId) {
+        setConnStatus("コネクタ種別を選択してください。", true);
+        return;
+      }
+
+      const credentials = {};
+      const credInputs = connCredFieldsEl.querySelectorAll("input[data-cred-key]");
+      for (const inp of credInputs) {
+        const key = inp.dataset.credKey;
+        const val = inp.value.trim();
+        if (val !== "") {
+          credentials[key] = val;
+        }
+      }
+
+      saveConnBtn.disabled = true;
+      try {
+        const saved = await invoke("save_connection", {
+          input: {
+            id,
+            name,
+            connector_id: connectorId,
+            credentials,
+          },
+        });
+        clearCredentialInputs();
+        closeConnectionForm();
+        setConnStatus(`接続「${saved.id}」を保存しました（資格情報マネージャーへ安全に保管）。`);
+        await refreshConnections();
+      } catch (err) {
+        setConnStatus(`接続保存エラー: ${err}`, true);
+      } finally {
+        saveConnBtn.disabled = false;
+      }
+    });
+
+    async function refreshConnectors() {
+      try {
+        connectorsCache = await invoke("list_connectors");
+        if (!connFormBox.hidden && editingConnectionId === null) {
+          const prev = connConnectorEl.value;
+          populateConnectorOptions(prev);
+          updateDestinationPreview();
+        }
+      } catch (err) {
+        setConnStatus(`コネクタ一覧取得エラー: ${err}`, true);
+      }
+    }
+
+    function renderConnectionTestResult(container, res) {
+      container.hidden = false;
+      container.className = `conn-test-result ${res.ok ? "ok" : "err"}`;
+      container.innerHTML = "";
+
+      const head = document.createElement("div");
+      head.style.fontWeight = "600";
+      const statusText = res.status > 0 ? `HTTP ${res.status} / ` : "";
+      head.textContent = `${res.ok ? "PASS" : "FAIL"}: ${statusText}${res.summary || ""}`;
+      container.appendChild(head);
+
+      if (res.detail) {
+        const detail = document.createElement("div");
+        detail.textContent = res.detail;
+        container.appendChild(detail);
+      }
+
+      if (res.hint) {
+        const hint = document.createElement("div");
+        hint.className = "conn-test-hint";
+        hint.textContent = `ヒント: ${res.hint}`;
+        container.appendChild(hint);
+      }
+    }
+
+    async function refreshConnections() {
+      try {
+        connectionsCache = await invoke("list_connections");
+      } catch (err) {
+        setConnStatus(`接続一覧取得エラー: ${err}`, true);
+        return;
+      }
+
+      connectionListEl.innerHTML = "";
+      if (!connectionsCache.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "外部サービス接続はまだ登録されていません。「＋ 接続を追加」から設定してください。";
+        connectionListEl.appendChild(empty);
+        return;
+      }
+
+      for (const conn of connectionsCache) {
+        const card = document.createElement("div");
+        card.className = "widget-card";
+
+        const top = document.createElement("div");
+        top.className = "widget-top";
+
+        const titleWrap = document.createElement("div");
+        titleWrap.className = "widget-title-wrap";
+        titleWrap.style.flexWrap = "wrap";
+
+        const officialBadge = document.createElement("span");
+        officialBadge.className = `badge ${conn.official ? "official" : "custom"}`;
+        officialBadge.textContent = conn.official ? "✓ 公式 (Official)" : "カスタム";
+
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "widget-title";
+        titleSpan.textContent = `${conn.name} (${conn.id})`;
+
+        const connectorBadge = document.createElement("span");
+        connectorBadge.className = "badge";
+        connectorBadge.textContent = conn.connector_name || conn.connector_id;
+
+        titleWrap.appendChild(officialBadge);
+        titleWrap.appendChild(titleSpan);
+        titleWrap.appendChild(connectorBadge);
+
+        const secretBadge = document.createElement("span");
+        secretBadge.className = `badge ${conn.has_secret ? "file" : "warn"}`;
+        secretBadge.textContent = conn.has_secret ? "資格情報: 登録済み" : "資格情報: 未登録";
+
+        top.appendChild(titleWrap);
+        top.appendChild(secretBadge);
+
+        const metaDiv = document.createElement("div");
+        metaDiv.className = "widget-source";
+        const hostsText = Array.isArray(conn.allowed_hosts) && conn.allowed_hosts.length
+          ? ` (許可ホスト: ${conn.allowed_hosts.join(", ")})`
+          : "";
+        metaDiv.textContent = `送信先: ${conn.base_url || "-"}${hostsText}`;
+
+        const bottom = document.createElement("div");
+        bottom.className = "widget-bottom";
+
+        const keysInfo = document.createElement("div");
+        keysInfo.className = "widget-coords";
+        const keyList = Array.isArray(conn.configured_keys) && conn.configured_keys.length
+          ? conn.configured_keys.join(", ")
+          : "なし";
+        keysInfo.textContent = `保管キー: ${keyList}`;
+
+        const actions = document.createElement("div");
+        actions.className = "widget-actions";
+
+        const testResultBox = document.createElement("div");
+        testResultBox.className = "conn-test-result";
+        testResultBox.hidden = true;
+
+        const btnTest = document.createElement("button");
+        btnTest.type = "button";
+        btnTest.className = "secondary";
+        btnTest.textContent = "接続テスト";
+        btnTest.addEventListener("click", async () => {
+          btnTest.disabled = true;
+          try {
+            const res = await invoke("test_connection", { id: conn.id });
+            renderConnectionTestResult(testResultBox, res);
+            setConnStatus(
+              res.ok
+                ? `接続「${conn.id}」テスト成功: ${res.summary}`
+                : `接続「${conn.id}」テスト失敗: ${res.summary}`,
+              !res.ok
+            );
+          } catch (err) {
+            renderConnectionTestResult(testResultBox, {
+              ok: false,
+              status: 0,
+              summary: "テスト実行エラー",
+              detail: String(err),
+              hint: null,
+            });
+            setConnStatus(`接続テストエラー: ${err}`, true);
+          } finally {
+            btnTest.disabled = false;
+          }
+        });
+
+        const btnEdit = document.createElement("button");
+        btnEdit.type = "button";
+        btnEdit.className = "secondary";
+        btnEdit.textContent = "編集（トークン差替）";
+        btnEdit.addEventListener("click", async () => {
+          if (connectorsCache.length === 0) {
+            await refreshConnectors();
+          }
+          openConnectionFormForEdit(conn);
+        });
+
+        const btnDelete = document.createElement("button");
+        btnDelete.type = "button";
+        btnDelete.className = "danger";
+        btnDelete.textContent = "削除";
+        btnDelete.addEventListener("click", async () => {
+          btnDelete.disabled = true;
+          try {
+            await invoke("delete_connection", { id: conn.id });
+            if (editingConnectionId === conn.id) {
+              closeConnectionForm();
+            }
+            setConnStatus(`接続「${conn.id}」と資格情報マネージャーの秘密を削除しました。`);
+            await refreshConnections();
+          } catch (err) {
+            setConnStatus(`削除エラー: ${err}`, true);
+          } finally {
+            btnDelete.disabled = false;
+          }
+        });
+
+        actions.appendChild(btnTest);
+        actions.appendChild(btnEdit);
+        actions.appendChild(btnDelete);
+
+        bottom.appendChild(keysInfo);
+        bottom.appendChild(actions);
+
+        card.appendChild(top);
+        card.appendChild(metaDiv);
+        card.appendChild(bottom);
+        card.appendChild(testResultBox);
+        connectionListEl.appendChild(card);
+      }
+    }
+
     async function refreshAll() {
-      await Promise.all([refreshWidgets(), refreshAutostart()]);
+      await Promise.all([
+        refreshWidgets(),
+        refreshAutostart(),
+        refreshConnectors(),
+        refreshConnections(),
+      ]);
     }
 
     listen("widgets-updated", () => {
       refreshAll();
+    });
+
+    listen("connections-updated", () => {
+      refreshConnections();
     });
 
     invoke("get_webview_data_dir")

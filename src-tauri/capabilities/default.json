@@ -19,6 +19,11 @@
     "allow-reload-widget",
     "allow-reload-all-widgets",
     "allow-get-autostart",
-    "allow-set-autostart"
+    "allow-set-autostart",
+    "allow-list-connectors",
+    "allow-list-connections",
+    "allow-save-connection",
+    "allow-delete-connection",
+    "allow-test-connection"
   ]
 }
