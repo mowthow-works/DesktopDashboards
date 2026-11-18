@@ -21,6 +21,9 @@
 
 ## 2. Git / GitHub Issue / Release 運用ルール
 
+- **ブランチ運用（`main` 直 Push 禁止）**:
+  - **`main` ブランチへの直接コミットおよび直接 Push は原則禁止**とする。
+  - 日常の開発・各 Issue の作業は次期バージョン用ブランチ（`dev/vX.Y.Z`、現在は `dev/v0.2.0`）上で進め、リリース時またはユーザーの明示的な指示があるときのみ `main` へ統合（マージ・Push）すること。
 - 作業を開始する前に、何をするのかユーザーへメッセージを出力してから着手すること。
 - Git リポジトリのコード・ドキュメントを変更する場合は、先に GitHub Issue を発行し、ユーザーの確認を得てから作業を進めること。
 - Git コミットはユーザーの動作確認・レビュー承認後に実施し、日本語のコミットメッセージに `(Closes #<Issue番号>)` を含めること。
@@ -49,5 +52,18 @@
 ## 4. 自動テスト運用ルール
 
 - **Rust バックエンド単体テスト (`npm run test:rust`)**
-  - 対象: `src-tauri/src/`（CLI 引数解析、原子的設定永続化・バックアップフォールバック、非重複配置、ナビゲーション制御、自動起動設定同期等）
+  - 対象: `src-tauri/src/`（CLI 引数解析、原子的設定永続化・バックアップフォールバック、非重複配置、ナビゲーション制御、自動起動設定同期、`dd_bridge` 呼び出し元・Origin・ACL・ストレージ分離検証等）
 - Rust コード（`.rs`）を変更した場合は、ユーザーへ動作確認を依頼する前に **必ず `npm run test:rust` を実行し、全テストがパスすることを確認** すること。
+
+---
+
+## 5. ローカル HTML ブリッジ (`window.DD`) と Tauri v2 ACL 運用ルール
+
+- **カスタムプロトコルと Capability 分離**:
+  - Tauri v2 では登録済みカスタムプロトコル（`widgetfile` → `http://widgetfile.localhost`）が `Origin::Local` として判定されるため、`dd_*` コマンド用 Capability（`src-tauri/capabilities/widgets-dd.json`）は **`"local": true` のみ（`"remote"` 不定義）** とし、外部 Web オリジン（`Origin::Remote`）から Tauri ACL 層で切り離すこと。
+  - 外部 URL ガジェット用 Capability（`src-tauri/capabilities/widgets.json`）には `allow-dd-*` 権限を混ぜないこと。
+- **多層防御（トップフレーム限定 & Rust 側検証）**:
+  - 初期化スクリプトでは `window === window.top` かつ `http://widgetfile.localhost` に限定して `window.DD` を定義し、外部 `<iframe>` 等のサブフレームへ露出させないこと。
+  - `dd_*` 全 Rust コマンドでは呼び出し元ウィンドウの `SourceType::File` と IPC リクエストの `Origin` ヘッダ（`http://widgetfile.localhost`）を強制検証すること。
+- **認証情報の非露出**:
+  - トークン・シークレットはログ、標準エラー出力、エラーメッセージ、返却 JSON、チャット、GitHub Issue 等に絶対に出力しないこと。
