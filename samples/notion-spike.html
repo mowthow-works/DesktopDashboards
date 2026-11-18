@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Notion API (2025-09-03) Phase 4a スパイク - DesktopDashboards</title>
+  <title>Notion API (2025-09-03) Phase 4b-1 スパイク検証 - DesktopDashboards</title>
   <style>
     :root {
       color-scheme: dark;
@@ -395,7 +395,7 @@
 <body>
   <header>
     <h1>Notion API (2025-09-03) スパイク検証</h1>
-    <span class="tag" id="header-badge">PHASE 4a SPIKE</span>
+    <span class="tag" id="header-badge">PHASE 4b-1 SPIKE</span>
   </header>
 
   <section class="card">
@@ -472,6 +472,9 @@
       <button type="button" class="danger" id="btn-neg-patch">④ 負テスト: 未許可エンドポイント (PATCH /v1/pages/test)</button>
       <button type="button" class="danger full" id="btn-neg-iframe">⑤ 負テスト: iframe 隔離確認 (window.DD 非注入 &amp; invoke 拒否)</button>
     </div>
+    <div class="field-hint">
+      トークンは <code>Windows 資格情報マネージャー</code>（ターゲット名 <code>DesktopDashboards:connection:notion:token</code>、旧 <code>connections.json</code> からの自動移行対応）から注入されます。許可エンドポイントは <code>コネクタ定義 × notion-spike.manifest.json</code> の積集合で判定され、④ <code>PATCH /v1/pages/test</code> は積集合判定で拒否されます。
+    </div>
   </section>
 
   <section class="card">
@@ -481,7 +484,7 @@
     </div>
 
     <div class="banner info" id="result-message">
-      上のボタンから検証アクションを実行してください。トークンは <code>%APPDATA%\DesktopDashboards\connections.json</code> に設定します。
+      上のボタンから検証アクションを実行してください。トークンは <code>Windows 資格情報マネージャー</code>（<code>DesktopDashboards:connection:notion:token</code>、旧 <code>connections.json</code> からの自動移行対応）から注入され、許可エンドポイントは <code>コネクタ定義 × notion-spike.manifest.json</code> の積集合で判定されます。
     </div>
 
     <div class="status-grid">
@@ -1333,7 +1336,7 @@
           });
           setBadge(resultBadgeEl, "FAIL (通過)", "err");
           setMessageBanner(
-            `警告: 未許可エンドポイント PATCH /v1/pages/test がガードを通過しました (HTTP ${res.status})`,
+            `警告: 未許可エンドポイント PATCH /v1/pages/test が積集合ガードを通過しました (HTTP ${res.status})`,
             "err"
           );
           updateExecutionMetrics({
@@ -1345,11 +1348,11 @@
             dataSourceId: "-",
           });
           renderJsonPreview(res);
-          appendLog(`負テスト FAIL: ガードを通過 (HTTP ${res.status})`);
+          appendLog(`負テスト FAIL: 積集合ガードを通過 (HTTP ${res.status})`);
         } catch (err) {
           const msg = formatError(err);
           setBadge(resultBadgeEl, "PASS (拒否確認)", "ok");
-          setMessageBanner(`期待通りガードで拒否されました: ${msg}`, "ok");
+          setMessageBanner(`期待通りコネクタ × manifest 積集合ガードで拒否されました: ${msg}`, "ok");
           updateExecutionMetrics({
             cacheStatus: "N/A",
             httpStatus: "REJECTED (期待通り)",
@@ -1359,7 +1362,7 @@
             dataSourceId: "-",
           });
           renderJsonPreview({ expectedRejection: true, error: msg });
-          appendLog(`負テスト PASS: ガード拒否 (${msg})`);
+          appendLog(`負テスト PASS: 積集合ガード拒否 (${msg})`);
         } finally {
           setBusy(false);
         }

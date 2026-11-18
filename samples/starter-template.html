@@ -56,6 +56,23 @@
       border: 1px solid rgba(52, 211, 153, 0.35);
       white-space: nowrap;
     }
+    .tag.info {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+    .tag.err {
+      background: rgba(248, 113, 113, 0.15);
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.35);
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -131,6 +148,7 @@
     .btn-group {
       display: flex;
       gap: 6px;
+      flex-wrap: wrap;
     }
     button {
       border: none;
@@ -141,6 +159,10 @@
       font-weight: 600;
       cursor: pointer;
     }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     button.primary {
       background: #2563eb;
       color: #fff;
@@ -148,6 +170,30 @@
     button.secondary {
       background: #334155;
       color: #e2e8f0;
+    }
+    button.danger {
+      background: rgba(248, 113, 113, 0.18);
+      color: #fecaca;
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
+    .dd-result {
+      background: #141820;
+      border: 1px solid #242b38;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #cbd5e1;
+      word-break: break-word;
+    }
+    .dd-result.ok {
+      border-color: rgba(52, 211, 153, 0.4);
+      background: rgba(52, 211, 153, 0.08);
+      color: #a7f3d0;
+    }
+    .dd-result.err {
+      border-color: rgba(248, 113, 113, 0.45);
+      background: rgba(248, 113, 113, 0.09);
+      color: #fecaca;
     }
     .links {
       display: flex;
@@ -229,15 +275,34 @@
     </div>
   </section>
 
+  <section class="card">
+    <div class="section-head">
+      <h2>Phase 4b 制限モードテスト（manifest 無し HTML）</h2>
+      <span class="tag info" id="dd-test-badge">未実行</span>
+    </div>
+    <div class="btn-group">
+      <button type="button" class="primary" id="btn-dd-storage-test">DD.storage 読み書きテスト（許可）</button>
+      <button type="button" class="danger" id="btn-dd-connect-test">DD.connect 呼び出しテスト（制限モード拒否）</button>
+    </div>
+    <div class="dd-result" id="dd-test-result">
+      対応する <code>.manifest.json</code> が無いローカル HTML では <code>DD.storage</code> のみ利用でき、<code>DD.connect</code> は制限モードとして拒否されます。
+    </div>
+  </section>
+
   <script>
     (() => {
       const STORAGE_KEY = "dd_sample_starter_counter_v1";
+      const DD_TEST_STORAGE_KEY = "starter:restriction_test";
       const clockEl = document.getElementById("live-clock");
       const sizeEl = document.getElementById("live-size");
       const originEl = document.getElementById("live-origin");
       const counterValEl = document.getElementById("counter-val");
       const incBtn = document.getElementById("btn-inc");
       const resetBtn = document.getElementById("btn-reset");
+      const ddTestBadgeEl = document.getElementById("dd-test-badge");
+      const ddTestResultEl = document.getElementById("dd-test-result");
+      const ddStorageTestBtn = document.getElementById("btn-dd-storage-test");
+      const ddConnectTestBtn = document.getElementById("btn-dd-connect-test");
 
       function updateClock() {
         const now = new Date();
@@ -245,6 +310,133 @@
         const mm = String(now.getMinutes()).padStart(2, "0");
         const ss = String(now.getSeconds()).padStart(2, "0");
         clockEl.textContent = `${hh}:${mm}:${ss}`;
+      }
+
+      function getLocalTimestamp() {
+        const now = new Date();
+        const yyyy = String(now.getFullYear());
+        const mo = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mi = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        return `${yyyy}-${mo}-${dd} ${hh}:${mi}:${ss}`;
+      }
+
+      function hasDDBridge() {
+        return (
+          typeof window.DD !== "undefined" &&
+          window.DD !== null &&
+          typeof window.DD.storage?.get === "function" &&
+          typeof window.DD.storage?.set === "function" &&
+          typeof window.DD.connect?.request === "function"
+        );
+      }
+
+      function formatDDError(err) {
+        if (typeof err === "string") return err;
+        if (err && typeof err.message === "string") return err.message;
+        try {
+          return JSON.stringify(err);
+        } catch (_) {
+          return String(err);
+        }
+      }
+
+      function setDDTestResult(badgeText, badgeTone, message, boxTone) {
+        ddTestBadgeEl.textContent = badgeText;
+        ddTestBadgeEl.className = badgeTone ? `tag ${badgeTone}` : "tag";
+        ddTestResultEl.textContent = message;
+        ddTestResultEl.className = boxTone ? `dd-result ${boxTone}` : "dd-result";
+      }
+
+      function setDDTestBusy(busy) {
+        ddStorageTestBtn.disabled = busy;
+        ddConnectTestBtn.disabled = busy;
+      }
+
+      async function runDDStorageTest() {
+        if (!hasDDBridge()) {
+          setDDTestResult(
+            "DD 未注入",
+            "err",
+            "FAIL: window.DD が未注入です（ローカル HTML ウィジェットとして開いてテストしてください）。",
+            "err"
+          );
+          return;
+        }
+        setDDTestBusy(true);
+        try {
+          const payload = {
+            mode: "restricted_no_manifest",
+            testedAt: getLocalTimestamp(),
+          };
+          await window.DD.storage.set(DD_TEST_STORAGE_KEY, payload);
+          const loaded = await window.DD.storage.get(DD_TEST_STORAGE_KEY);
+          if (
+            loaded &&
+            loaded.mode === payload.mode &&
+            loaded.testedAt === payload.testedAt
+          ) {
+            setDDTestResult(
+              "PASS (許可)",
+              "",
+              `PASS: manifest 無しの制限モードでも DD.storage.set / get が正常動作しました (${DD_TEST_STORAGE_KEY} = ${JSON.stringify(loaded)})`,
+              "ok"
+            );
+          } else {
+            setDDTestResult(
+              "FAIL (不一致)",
+              "err",
+              `FAIL: 読み戻し値が一致しませんでした (${JSON.stringify(loaded)})`,
+              "err"
+            );
+          }
+        } catch (err) {
+          setDDTestResult(
+            "FAIL (エラー)",
+            "err",
+            `FAIL: DD.storage テストでエラーが発生しました: ${formatDDError(err)}`,
+            "err"
+          );
+        } finally {
+          setDDTestBusy(false);
+        }
+      }
+
+      async function runDDConnectRestrictedTest() {
+        if (!hasDDBridge()) {
+          setDDTestResult(
+            "DD 未注入",
+            "err",
+            "FAIL: window.DD が未注入です（ローカル HTML ウィジェットとして開いてテストしてください）。",
+            "err"
+          );
+          return;
+        }
+        setDDTestBusy(true);
+        try {
+          const res = await window.DD.connect.request({
+            connection: "notion",
+            method: "GET",
+            path: "/v1/users/me",
+          });
+          setDDTestResult(
+            "FAIL (通過)",
+            "err",
+            `FAIL: manifest 無しにもかかわらず DD.connect.request が許可されました: ${JSON.stringify(res)}`,
+            "err"
+          );
+        } catch (err) {
+          setDDTestResult(
+            "PASS (制限モード拒否)",
+            "",
+            `PASS: 期待通り manifest 無しの制限モードとして拒否されました (${formatDDError(err)})`,
+            "ok"
+          );
+        } finally {
+          setDDTestBusy(false);
+        }
       }
 
       function updateSize() {
@@ -281,6 +473,14 @@
         count = 0;
         saveCount(count);
         renderCount();
+      });
+
+      ddStorageTestBtn.addEventListener("click", () => {
+        void runDDStorageTest();
+      });
+
+      ddConnectTestBtn.addEventListener("click", () => {
+        void runDDConnectRestrictedTest();
       });
 
       originEl.textContent = location.origin || location.href;

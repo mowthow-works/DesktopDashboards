@@ -1,0 +1,35 @@
+{
+  "id": "notion",
+  "name": "Notion",
+  "official": true,
+  "base_url": "https://api.notion.com",
+  "allowed_hosts": ["api.notion.com"],
+  "auth": {
+    "type": "bearer",
+    "credential_key": "token"
+  },
+  "headers": {
+    "Notion-Version": "2025-09-03"
+  },
+  "credential_schema": [
+    {
+      "key": "token",
+      "label": "Internal Integration Secret",
+      "type": "secret",
+      "required": true,
+      "placeholder": "ntn_..."
+    }
+  ],
+  "test": {
+    "method": "GET",
+    "path": "/v1/users/me"
+  },
+  "endpoints": [
+    { "method": "GET", "path": "/v1/users/me" },
+    { "method": "GET", "path": "/v1/databases/*" },
+    { "method": "GET", "path": "/v1/data_sources/*" },
+    { "method": "POST", "path": "/v1/data_sources/*/query" },
+    { "method": "GET", "path": "/v1/pages/*" },
+    { "method": "PATCH", "path": "/v1/pages/*" }
+  ]
+}
