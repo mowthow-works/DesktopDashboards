@@ -351,6 +351,24 @@
           "markdownDescription": "Enables the add_widget command without any pre-configured scope."
         },
         {
+          "description": "Enables the dd_connect_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dd-connect-request",
+          "markdownDescription": "Enables the dd_connect_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the dd_storage_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dd-storage-get",
+          "markdownDescription": "Enables the dd_storage_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the dd_storage_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dd-storage-set",
+          "markdownDescription": "Enables the dd_storage_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the delete_widget command without any pre-configured scope.",
           "type": "string",
           "const": "allow-delete-widget",
@@ -433,6 +451,24 @@
           "type": "string",
           "const": "deny-add-widget",
           "markdownDescription": "Denies the add_widget command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dd_connect_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dd-connect-request",
+          "markdownDescription": "Denies the dd_connect_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dd_storage_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dd-storage-get",
+          "markdownDescription": "Denies the dd_storage_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dd_storage_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dd-storage-set",
+          "markdownDescription": "Denies the dd_storage_set command without any pre-configured scope."
         },
         {
           "description": "Denies the delete_widget command without any pre-configured scope.",

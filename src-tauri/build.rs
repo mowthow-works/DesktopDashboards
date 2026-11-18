@@ -41,6 +41,9 @@ fn main() {
                 "reload_all_widgets",
                 "get_autostart",
                 "set_autostart",
+                "dd_storage_get",
+                "dd_storage_set",
+                "dd_connect_request",
             ]),
         )
         .windows_attributes(tauri_build::WindowsAttributes::new().app_manifest(WINDOWS_APP_MANIFEST));

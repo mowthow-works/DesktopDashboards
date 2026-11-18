@@ -66,12 +66,14 @@ Web URL だけでなく、ローカルに作成した HTML ファイルをデス
 - `samples/sticky-todo.html`: **付箋メモ＆ToDoリスト** — `localStorage` による即時自動保存・リロードガード・フォーカス非奪取の体験用サンプル
 - `samples/pomodoro-timer.html`: **ポモドーロ集中タイマー** — 円形プログレスリング・チャイム通知（消音可）・当日完了数記録付きの作業用タイマー
 - `samples/starter-template.html`: **自作ガジェット用スターターテンプレート** — 上端 28px ホバーバー余白、同一フォルダ内の相対パス読み込み、外部リンクの既定ブラウザ起動、`localStorage` テストの解説付き
+- `samples/notion-spike.html`: **Notion API (`2025-09-03`) & `window.DD` ブリッジ検証サンプル（Phase 4a スパイク）** — `DD.storage`（ウィジェット分離ストレージ）と `DD.connect.request`（`connections.json` 経由の読み取り限定プロキシ）の動作確認用サンプル
 
 ### ローカル HTML 作成時のポイント
 
 - **相対パス資産**: 選択した HTML と同じフォルダおよびサブフォルダ内の CSS / JS / 画像 / JSON 等は相対パスで読み込めます（`widgetfile` カスタムプロトコル経由・親ディレクトリ外への参照は遮断）。
 - **上端余白**: ロック解除時は上端 28px にホバー操作バーが表示されるため、`body` に `padding-top: 32px` 程度を確保すると操作しやすくなります。
 - **外部リンク**: `http://` / `https://` へのリンクはガジェット内ではなく OS の既定ブラウザで開きます。
+- **`window.DD` ブリッジ（Phase 4a スパイク原型）**: ローカル HTML ガジェットのトップフレーム（`http://widgetfile.localhost`）にのみ注入され、ウィジェット単位の分離ストレージ（`DD.storage.get` / `set`、`%APPDATA%\DesktopDashboards\storage\{widget_id}.json` 保存）およびホスト側トークン注入型の API ブリッジ（`DD.connect.request`、`%APPDATA%\DesktopDashboards\connections.json` 参照、4a では Notion 読み取り系 3 エンドポイントのみ許可）を利用できます。URL ガジェットや外部 `<iframe>` からの呼び出しは ACL および Rust 側 `Origin` 検証で遮断されます。
 
 ## 技術スタック
 

@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notion API (2025-09-03) Phase 4a スパイク - DesktopDashboards</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1b2029;
+      --panel-sub: #141820;
+      --border: #2c3442;
+      --text: #eef2f6;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    /* 上端 28px はロック解除時のホバー操作バーと重ならないよう余白を確保 */
+    body {
+      padding: 34px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      white-space: nowrap;
+    }
+    .tag.ok {
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--green);
+      border-color: rgba(52, 211, 153, 0.35);
+    }
+    .tag.warn {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--amber);
+      border-color: rgba(251, 191, 36, 0.35);
+    }
+    .tag.err {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--red);
+      border-color: rgba(248, 113, 113, 0.35);
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      background: var(--panel-sub);
+      border: 1px solid #242b38;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stat.full {
+      grid-column: 1 / -1;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .stat-val {
+      font-size: 13px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      word-break: break-all;
+    }
+    .stat-val.ok { color: var(--green); }
+    .stat-val.err { color: var(--red); }
+    .stat-val.warn { color: var(--amber); }
+    .stat-val.accent { color: var(--accent); }
+    code {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 11px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #0f1217;
+      border: 1px solid #2b3444;
+      color: #7dd3fc;
+      word-break: break-all;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .field label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .field-hint {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid #384252;
+      background: #0f1217;
+      color: #f8fafc;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .actions-grid .full {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 480px) {
+      .actions-grid,
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 7px 11px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background-color 0.15s;
+      text-align: center;
+    }
+    button:hover:not(:disabled) {
+      opacity: 0.92;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    button.primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+    button.secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+    button.danger {
+      background: rgba(248, 113, 113, 0.18);
+      color: #fecaca;
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
+    .cache-box {
+      background: var(--panel-sub);
+      border: 1px solid #242b38;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .cache-info {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .banner {
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-sub);
+      word-break: break-word;
+    }
+    .banner.ok {
+      border-color: rgba(52, 211, 153, 0.4);
+      background: rgba(52, 211, 153, 0.08);
+      color: #a7f3d0;
+    }
+    .banner.err {
+      border-color: rgba(248, 113, 113, 0.45);
+      background: rgba(248, 113, 113, 0.09);
+      color: #fecaca;
+    }
+    .banner.info {
+      border-color: rgba(56, 189, 248, 0.35);
+      background: rgba(56, 189, 248, 0.08);
+      color: #bae6fd;
+    }
+    .schema-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .schema-chip {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #0f1217;
+      border: 1px solid #2c3442;
+      color: #cbd5e1;
+    }
+    .schema-chip strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .page-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .page-item {
+      background: var(--panel-sub);
+      border: 1px solid #242b38;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .page-title {
+      font-weight: 600;
+      color: var(--text);
+      word-break: break-word;
+    }
+    .page-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .meta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #0f1217;
+      border: 1px solid #263040;
+    }
+    .meta-pill.checked {
+      color: var(--green);
+      border-color: rgba(52, 211, 153, 0.35);
+    }
+    .log-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 120px;
+      overflow-y: auto;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 11px;
+      color: #cbd5e1;
+    }
+    .log-item {
+      padding: 3px 6px;
+      border-radius: 4px;
+      background: #0f1217;
+      border: 1px solid #222936;
+      word-break: break-all;
+    }
+    details {
+      border: 1px solid #242b38;
+      border-radius: 8px;
+      background: #0f1217;
+      padding: 6px 10px;
+    }
+    summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      user-select: none;
+    }
+    pre.json-preview {
+      margin: 8px 0 2px;
+      padding: 8px;
+      border-radius: 6px;
+      background: #0b0e13;
+      border: 1px solid #1f2633;
+      color: #cbd5e1;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      max-height: 260px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .empty-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Notion API (2025-09-03) スパイク検証</h1>
+    <span class="tag" id="header-badge">PHASE 4a SPIKE</span>
+  </header>
+
+  <section class="card">
+    <h2>環境ステータス</h2>
+    <div class="status-grid">
+      <div class="stat">
+        <div class="stat-label">window.DD ブリッジ</div>
+        <div class="stat-val" id="dd-status">確認中...</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">ローカル今日 (YYYY-MM-DD)</div>
+        <div class="stat-val accent" id="local-today">----/--/--</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>ウィジェット設定 (DD.storage 分離保存)</h2>
+      <span class="tag" id="settings-badge">未保存</span>
+    </div>
+
+    <div class="field">
+      <label for="input-db-id">Database ID（Notion DB URL または ハイフンあり/なし ID）</label>
+      <input
+        type="text"
+        id="input-db-id"
+        placeholder="例: https://www.notion.so/... または 32桁ID / UUID"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="field-hint">
+        保存キー: <code>notion:database_id</code> / 正規化 ID: <code id="normalized-db-id">(未入力)</code>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="input-date-prop">日付プロパティ名（空欄時はフィルタなしでクエリ）</label>
+      <input
+        type="text"
+        id="input-date-prop"
+        value="日付"
+        placeholder="空欄でフィルタなし（例: 日付 / Date / Due）"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="field-hint">保存キー: <code>notion:date_property</code></div>
+    </div>
+
+    <div class="btn-group">
+      <button type="button" class="primary" id="btn-save-settings">設定を保存 (DD.storage.set)</button>
+      <button type="button" class="secondary" id="btn-reload-settings">再読込 (DD.storage.get)</button>
+    </div>
+
+    <div class="cache-box">
+      <div class="cache-info">
+        <div class="stat-label">キャッシュ済み <code>data_source_id</code></div>
+        <div class="field-hint">キー: <code id="cache-key-display">notion:data_source_id:&lt;database_id&gt;</code></div>
+        <div class="stat-val" id="cache-val-display">未確認</div>
+      </div>
+      <button type="button" class="danger" id="btn-clear-cache">キャッシュ消去</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Notion API (2025-09-03) 検証アクション</h2>
+      <span class="tag" id="busy-badge" hidden>実行中...</span>
+    </div>
+    <div class="actions-grid">
+      <button type="button" class="secondary" id="btn-test-me">① 接続テスト (GET /v1/users/me)</button>
+      <button type="button" class="primary" id="btn-query-today">② 今日のタスク取得 (data_source_id解決 + 今日フィルタ)</button>
+      <button type="button" class="secondary" id="btn-query-all">③ 全件クエリ (フィルタなし・最大10件)</button>
+      <button type="button" class="danger" id="btn-neg-patch">④ 負テスト: 未許可エンドポイント (PATCH /v1/pages/test)</button>
+      <button type="button" class="danger full" id="btn-neg-iframe">⑤ 負テスト: iframe 隔離確認 (window.DD 非注入 &amp; invoke 拒否)</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>実行ステータス / 結果</h2>
+      <span class="tag" id="result-badge">待機中</span>
+    </div>
+
+    <div class="banner info" id="result-message">
+      上のボタンから検証アクションを実行してください。トークンは <code>%APPDATA%\DesktopDashboards\connections.json</code> に設定します。
+    </div>
+
+    <div class="status-grid">
+      <div class="stat">
+        <div class="stat-label">キャッシュ状態 (data_source_id)</div>
+        <div class="stat-val" id="res-cache-status">-</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">HTTP ステータス</div>
+        <div class="stat-val" id="res-http-status">-</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">ローカル日付 (YYYY-MM-DD)</div>
+        <div class="stat-val" id="res-local-date">-</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">再解決リトライ (404 / object_not_found)</div>
+        <div class="stat-val" id="res-retried">-</div>
+      </div>
+      <div class="stat full">
+        <div class="stat-label">解決された data_source_id</div>
+        <div class="stat-val" id="res-data-source-id">-</div>
+      </div>
+    </div>
+
+    <div id="user-info-wrap" hidden>
+      <div class="stat-label" style="margin-bottom: 4px;">Bot ユーザー情報</div>
+      <div class="page-item" id="user-info-card"></div>
+    </div>
+
+    <div id="schema-wrap" hidden>
+      <div class="stat-label" style="margin-bottom: 4px;">検出された DB プロパティ構成</div>
+      <div class="schema-list" id="schema-list"></div>
+    </div>
+
+    <div id="pages-wrap" hidden>
+      <div class="card-head" style="margin-bottom: 4px;">
+        <div class="stat-label">取得ページ一覧</div>
+        <span class="stat-label" id="pages-count">0 件</span>
+      </div>
+      <ul class="page-list" id="page-list"></ul>
+    </div>
+
+    <div>
+      <div class="stat-label" style="margin-bottom: 4px;">実行ログ</div>
+      <ul class="log-list" id="log-list"></ul>
+    </div>
+
+    <details id="json-details">
+      <summary>レスポンス JSON プレビュー（トークン非含有）</summary>
+      <pre class="json-preview" id="json-preview">(まだレスポンスはありません)</pre>
+    </details>
+  </section>
+
+  <script>
+    (() => {
+      const KEY_DATABASE_ID = "notion:database_id";
+      const KEY_DATE_PROPERTY = "notion:date_property";
+      const CACHE_KEY_PREFIX = "notion:data_source_id:";
+      const DEFAULT_DATE_PROPERTY = "日付";
+
+      const ddStatusEl = document.getElementById("dd-status");
+      const localTodayEl = document.getElementById("local-today");
+      const headerBadgeEl = document.getElementById("header-badge");
+      const settingsBadgeEl = document.getElementById("settings-badge");
+      const dbIdInput = document.getElementById("input-db-id");
+      const datePropInput = document.getElementById("input-date-prop");
+      const normalizedDbIdEl = document.getElementById("normalized-db-id");
+      const cacheKeyDisplayEl = document.getElementById("cache-key-display");
+      const cacheValDisplayEl = document.getElementById("cache-val-display");
+
+      const saveBtn = document.getElementById("btn-save-settings");
+      const reloadBtn = document.getElementById("btn-reload-settings");
+      const clearCacheBtn = document.getElementById("btn-clear-cache");
+
+      const busyBadgeEl = document.getElementById("busy-badge");
+      const testMeBtn = document.getElementById("btn-test-me");
+      const queryTodayBtn = document.getElementById("btn-query-today");
+      const queryAllBtn = document.getElementById("btn-query-all");
+      const negPatchBtn = document.getElementById("btn-neg-patch");
+      const negIframeBtn = document.getElementById("btn-neg-iframe");
+
+      const resultBadgeEl = document.getElementById("result-badge");
+      const resultMessageEl = document.getElementById("result-message");
+      const resCacheStatusEl = document.getElementById("res-cache-status");
+      const resHttpStatusEl = document.getElementById("res-http-status");
+      const resLocalDateEl = document.getElementById("res-local-date");
+      const resRetriedEl = document.getElementById("res-retried");
+      const resDataSourceIdEl = document.getElementById("res-data-source-id");
+
+      const userInfoWrapEl = document.getElementById("user-info-wrap");
+      const userInfoCardEl = document.getElementById("user-info-card");
+      const schemaWrapEl = document.getElementById("schema-wrap");
+      const schemaListEl = document.getElementById("schema-list");
+      const pagesWrapEl = document.getElementById("pages-wrap");
+      const pagesCountEl = document.getElementById("pages-count");
+      const pageListEl = document.getElementById("page-list");
+      const logListEl = document.getElementById("log-list");
+      const jsonDetailsEl = document.getElementById("json-details");
+      const jsonPreviewEl = document.getElementById("json-preview");
+
+      const actionButtons = [
+        saveBtn,
+        reloadBtn,
+        clearCacheBtn,
+        testMeBtn,
+        queryTodayBtn,
+        queryAllBtn,
+        negPatchBtn,
+        negIframeBtn,
+      ];
+
+      /**
+       * ローカルタイムゾーンで今日の日付 YYYY-MM-DD を組み立てる
+       */
+      function getLocalTodayYmd() {
+        const now = new Date();
+        const yyyy = String(now.getFullYear());
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function getLocalTimeHms() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        return `${hh}:${mm}:${ss}`;
+      }
+
+      /**
+       * Notion DB URL またはハイフンあり/なし ID から Database ID を抽出・空白トリムする
+       */
+      function normalizeDatabaseId(raw) {
+        const trimmed = String(raw || "").trim();
+        if (!trimmed) return "";
+
+        if (/^https?:\/\//i.test(trimmed) || /[/?#]/.test(trimmed)) {
+          const pathPart = trimmed.split(/[?#]/)[0].replace(/\/+$/, "");
+          const uuidMatches = pathPart.match(
+            /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+          );
+          if (uuidMatches && uuidMatches.length > 0) {
+            return uuidMatches[uuidMatches.length - 1];
+          }
+          const hex32Matches = pathPart.match(/[0-9a-f]{32}/gi);
+          if (hex32Matches && hex32Matches.length > 0) {
+            return hex32Matches[hex32Matches.length - 1];
+          }
+        }
+
+        return trimmed;
+      }
+
+      function hasBridge() {
+        return (
+          typeof window.DD !== "undefined" &&
+          window.DD !== null &&
+          typeof window.DD.storage?.get === "function" &&
+          typeof window.DD.storage?.set === "function" &&
+          typeof window.DD.connect?.request === "function"
+        );
+      }
+
+      function formatError(err) {
+        if (typeof err === "string") return err;
+        if (err && typeof err.message === "string") return err.message;
+        try {
+          return JSON.stringify(err);
+        } catch (_) {
+          return String(err);
+        }
+      }
+
+      function appendLog(text) {
+        const li = document.createElement("li");
+        li.className = "log-item";
+        li.textContent = `[${getLocalTimeHms()}] ${text}`;
+        logListEl.prepend(li);
+        while (logListEl.children.length > 25) {
+          logListEl.removeChild(logListEl.lastChild);
+        }
+      }
+
+      function setBusy(isBusy) {
+        busyBadgeEl.hidden = !isBusy;
+        for (const btn of actionButtons) {
+          btn.disabled = isBusy;
+        }
+      }
+
+      function setBadge(el, text, tone) {
+        el.textContent = text;
+        el.className = tone ? `tag ${tone}` : "tag";
+      }
+
+      function setMessageBanner(text, tone) {
+        resultMessageEl.textContent = text;
+        resultMessageEl.className = `banner ${tone || "info"}`;
+      }
+
+      function updateEnvironmentStatus() {
+        const today = getLocalTodayYmd();
+        localTodayEl.textContent = today;
+
+        if (hasBridge()) {
+          ddStatusEl.textContent = "利用可能 (window.DD 注入済み)";
+          ddStatusEl.className = "stat-val ok";
+          setBadge(headerBadgeEl, "DD BRIDGE READY", "ok");
+        } else {
+          ddStatusEl.textContent = "利用不可 (window.DD 未注入)";
+          ddStatusEl.className = "stat-val err";
+          setBadge(headerBadgeEl, "NO DD BRIDGE", "err");
+        }
+      }
+
+      function getCacheKey(dbId) {
+        return CACHE_KEY_PREFIX + dbId;
+      }
+
+      function updateDbIdPreview() {
+        const dbId = normalizeDatabaseId(dbIdInput.value);
+        normalizedDbIdEl.textContent = dbId || "(未入力)";
+        cacheKeyDisplayEl.textContent = dbId
+          ? getCacheKey(dbId)
+          : `${CACHE_KEY_PREFIX}<database_id>`;
+        return dbId;
+      }
+
+      async function refreshCachedDataSourceDisplay() {
+        const dbId = updateDbIdPreview();
+        if (!dbId) {
+          cacheValDisplayEl.textContent = "Database ID 未入力";
+          cacheValDisplayEl.className = "stat-val warn";
+          return null;
+        }
+        if (!hasBridge()) {
+          cacheValDisplayEl.textContent = "DD ブリッジ未注入のため参照不可";
+          cacheValDisplayEl.className = "stat-val err";
+          return null;
+        }
+        try {
+          const cached = await window.DD.storage.get(getCacheKey(dbId));
+          if (typeof cached === "string" && cached.trim() !== "") {
+            cacheValDisplayEl.textContent = cached;
+            cacheValDisplayEl.className = "stat-val ok";
+            return cached;
+          }
+          cacheValDisplayEl.textContent = "未キャッシュ (null)";
+          cacheValDisplayEl.className = "stat-val";
+          return null;
+        } catch (err) {
+          cacheValDisplayEl.textContent = `読込エラー: ${formatError(err)}`;
+          cacheValDisplayEl.className = "stat-val err";
+          return null;
+        }
+      }
+
+      function clearRenderedDetails() {
+        userInfoWrapEl.hidden = true;
+        userInfoCardEl.textContent = "";
+        schemaWrapEl.hidden = true;
+        schemaListEl.textContent = "";
+        pagesWrapEl.hidden = true;
+        pageListEl.textContent = "";
+        pagesCountEl.textContent = "0 件";
+      }
+
+      function updateExecutionMetrics({
+        cacheStatus = "-",
+        httpStatus = "-",
+        httpTone = "",
+        localDate = "-",
+        retried = "-",
+        dataSourceId = "-",
+      }) {
+        resCacheStatusEl.textContent = cacheStatus;
+        resCacheStatusEl.className =
+          cacheStatus === "HIT"
+            ? "stat-val ok"
+            : cacheStatus === "MISS"
+              ? "stat-val warn"
+              : "stat-val";
+
+        resHttpStatusEl.textContent = String(httpStatus);
+        resHttpStatusEl.className = httpTone ? `stat-val ${httpTone}` : "stat-val";
+
+        resLocalDateEl.textContent = localDate;
+        resRetriedEl.textContent = retried;
+        resDataSourceIdEl.textContent = dataSourceId || "-";
+      }
+
+      function renderJsonPreview(payload) {
+        if (payload === undefined) {
+          jsonPreviewEl.textContent = "(なし)";
+          return;
+        }
+        try {
+          jsonPreviewEl.textContent = JSON.stringify(payload, null, 2);
+        } catch (_) {
+          jsonPreviewEl.textContent = String(payload);
+        }
+      }
+
+      function renderUserInfo(data) {
+        userInfoWrapEl.hidden = false;
+        userInfoCardEl.textContent = "";
+
+        const topRow = document.createElement("div");
+        topRow.className = "page-title-row";
+        const nameEl = document.createElement("span");
+        nameEl.className = "page-title";
+        nameEl.textContent = data?.name || "(名称なし)";
+        const typeEl = document.createElement("span");
+        typeEl.className = "tag ok";
+        typeEl.textContent = data?.type || "unknown";
+        topRow.append(nameEl, typeEl);
+
+        const metaRow = document.createElement("div");
+        metaRow.className = "page-meta";
+
+        const idPill = document.createElement("span");
+        idPill.className = "meta-pill";
+        idPill.textContent = `ID: ${data?.id || "-"}`;
+        metaRow.appendChild(idPill);
+
+        const wsName = data?.bot?.workspace_name;
+        if (wsName) {
+          const wsPill = document.createElement("span");
+          wsPill.className = "meta-pill";
+          wsPill.textContent = `Workspace: ${wsName}`;
+          metaRow.appendChild(wsPill);
+        }
+
+        const ownerType = data?.bot?.owner?.type;
+        if (ownerType) {
+          const ownerPill = document.createElement("span");
+          ownerPill.className = "meta-pill";
+          ownerPill.textContent = `Owner: ${ownerType}`;
+          metaRow.appendChild(ownerPill);
+        }
+
+        userInfoCardEl.append(topRow, metaRow);
+      }
+
+      function extractPageSummary(page) {
+        const props = page && typeof page.properties === "object" && page.properties !== null
+          ? page.properties
+          : {};
+
+        let title = "";
+        const dates = [];
+        const checkboxes = [];
+        const extras = [];
+
+        for (const [propName, propVal] of Object.entries(props)) {
+          if (!propVal || typeof propVal !== "object") continue;
+
+          if (propVal.type === "title") {
+            const fragments = Array.isArray(propVal.title) ? propVal.title : [];
+            const text = fragments.map((t) => t?.plain_text || "").join("");
+            if (!title) {
+              title = text;
+            }
+          } else if (propVal.type === "date") {
+            if (propVal.date && propVal.date.start) {
+              const rangeText = propVal.date.end
+                ? `${propVal.date.start} → ${propVal.date.end}`
+                : propVal.date.start;
+              dates.push({ name: propName, value: rangeText });
+            } else {
+              dates.push({ name: propName, value: "(未設定)" });
+            }
+          } else if (propVal.type === "checkbox") {
+            checkboxes.push({ name: propName, checked: Boolean(propVal.checkbox) });
+          } else if (propVal.type === "status" && propVal.status?.name) {
+            extras.push({ name: propName, value: propVal.status.name });
+          } else if (propVal.type === "select" && propVal.select?.name) {
+            extras.push({ name: propName, value: propVal.select.name });
+          }
+        }
+
+        return {
+          title: title || "(無題)",
+          dates,
+          checkboxes,
+          extras,
+          url: typeof page?.url === "string" && /^https:\/\//i.test(page.url) ? page.url : null,
+        };
+      }
+
+      function renderQueryResults(data) {
+        const results = Array.isArray(data?.results) ? data.results : [];
+
+        // プロパティ構成（名前・型の一覧）を走査
+        const schemaMap = new Map();
+        for (const page of results) {
+          const props = page?.properties;
+          if (!props || typeof props !== "object") continue;
+          for (const [propName, propVal] of Object.entries(props)) {
+            if (propVal && typeof propVal.type === "string" && !schemaMap.has(propName)) {
+              schemaMap.set(propName, propVal.type);
+            }
+          }
+        }
+
+        schemaListEl.textContent = "";
+        if (schemaMap.size > 0) {
+          schemaWrapEl.hidden = false;
+          for (const [propName, propType] of schemaMap.entries()) {
+            const chip = document.createElement("span");
+            chip.className = "schema-chip";
+            const strong = document.createElement("strong");
+            strong.textContent = propName;
+            const typeText = document.createTextNode(` (${propType})`);
+            chip.append(strong, typeText);
+            schemaListEl.appendChild(chip);
+          }
+        } else {
+          schemaWrapEl.hidden = true;
+        }
+
+        // ページ一覧
+        pagesWrapEl.hidden = false;
+        pagesCountEl.textContent = `${results.length} 件`;
+        pageListEl.textContent = "";
+
+        if (results.length === 0) {
+          const emptyLi = document.createElement("li");
+          emptyLi.className = "empty-note";
+          emptyLi.textContent = "該当するページは 0 件です。";
+          pageListEl.appendChild(emptyLi);
+          return;
+        }
+
+        for (const page of results) {
+          const summary = extractPageSummary(page);
+          const li = document.createElement("li");
+          li.className = "page-item";
+
+          const titleRow = document.createElement("div");
+          titleRow.className = "page-title-row";
+          const titleEl = document.createElement("span");
+          titleEl.className = "page-title";
+          titleEl.textContent = summary.title;
+          titleRow.appendChild(titleEl);
+
+          if (summary.url) {
+            const link = document.createElement("a");
+            link.href = summary.url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = "Notion で開く ↗";
+            titleRow.appendChild(link);
+          }
+          li.appendChild(titleRow);
+
+          const metaRow = document.createElement("div");
+          metaRow.className = "page-meta";
+
+          for (const cb of summary.checkboxes) {
+            const pill = document.createElement("span");
+            pill.className = cb.checked ? "meta-pill checked" : "meta-pill";
+            pill.textContent = `${cb.checked ? "☑" : "☐"} ${cb.name}`;
+            metaRow.appendChild(pill);
+          }
+
+          for (const dt of summary.dates) {
+            const pill = document.createElement("span");
+            pill.className = "meta-pill";
+            pill.textContent = `📅 ${dt.name}: ${dt.value}`;
+            metaRow.appendChild(pill);
+          }
+
+          for (const ex of summary.extras) {
+            const pill = document.createElement("span");
+            pill.className = "meta-pill";
+            pill.textContent = `${ex.name}: ${ex.value}`;
+            metaRow.appendChild(pill);
+          }
+
+          if (metaRow.children.length > 0) {
+            li.appendChild(metaRow);
+          }
+          pageListEl.appendChild(li);
+        }
+      }
+
+      function requireBridgeOrNotify() {
+        updateEnvironmentStatus();
+        if (hasBridge()) return true;
+        clearRenderedDetails();
+        setBadge(resultBadgeEl, "DD 未注入", "err");
+        setMessageBanner(
+          "window.DD が利用できません。ローカル HTML ウィジェット (SourceType::File) として読み込んで実行してください。",
+          "err"
+        );
+        updateExecutionMetrics({});
+        appendLog("中止: window.DD が未定義です");
+        return false;
+      }
+
+      async function loadSettings() {
+        if (!hasBridge()) {
+          updateDbIdPreview();
+          await refreshCachedDataSourceDisplay();
+          return;
+        }
+        try {
+          const savedDbId = await window.DD.storage.get(KEY_DATABASE_ID);
+          const savedDateProp = await window.DD.storage.get(KEY_DATE_PROPERTY);
+
+          if (typeof savedDbId === "string" && savedDbId.trim() !== "") {
+            dbIdInput.value = normalizeDatabaseId(savedDbId);
+          } else {
+            dbIdInput.value = "";
+          }
+
+          if (savedDateProp !== null && savedDateProp !== undefined) {
+            datePropInput.value = String(savedDateProp);
+          } else {
+            datePropInput.value = DEFAULT_DATE_PROPERTY;
+          }
+
+          setBadge(settingsBadgeEl, "読込済み", "ok");
+          await refreshCachedDataSourceDisplay();
+          appendLog("DD.storage から設定を復元しました");
+        } catch (err) {
+          setBadge(settingsBadgeEl, "読込失敗", "err");
+          appendLog(`設定復元エラー: ${formatError(err)}`);
+        }
+      }
+
+      async function saveSettings() {
+        if (!requireBridgeOrNotify()) return;
+        const dbId = normalizeDatabaseId(dbIdInput.value);
+        const dateProp = datePropInput.value.trim();
+
+        dbIdInput.value = dbId;
+        datePropInput.value = dateProp;
+
+        setBusy(true);
+        try {
+          await window.DD.storage.set(KEY_DATABASE_ID, dbId || null);
+          await window.DD.storage.set(KEY_DATE_PROPERTY, dateProp);
+          setBadge(settingsBadgeEl, "保存済み", "ok");
+          await refreshCachedDataSourceDisplay();
+          setBadge(resultBadgeEl, "設定保存", "ok");
+          setMessageBanner(
+            `DD.storage に保存しました (${KEY_DATABASE_ID}=${dbId || "null"}, ${KEY_DATE_PROPERTY}="${dateProp}")`,
+            "ok"
+          );
+          appendLog(`設定保存: dbId=${dbId || "(空)"}, dateProp="${dateProp}"`);
+        } catch (err) {
+          setBadge(settingsBadgeEl, "保存エラー", "err");
+          setBadge(resultBadgeEl, "エラー", "err");
+          setMessageBanner(`設定保存に失敗しました: ${formatError(err)}`, "err");
+          appendLog(`設定保存エラー: ${formatError(err)}`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function clearDataSourceCache() {
+        if (!requireBridgeOrNotify()) return;
+        const dbId = updateDbIdPreview();
+        if (!dbId) {
+          setBadge(resultBadgeEl, "入力不足", "warn");
+          setMessageBanner("キャッシュ消去するには Database ID を入力してください。", "err");
+          return;
+        }
+        const cacheKey = getCacheKey(dbId);
+        setBusy(true);
+        try {
+          await window.DD.storage.set(cacheKey, null);
+          await refreshCachedDataSourceDisplay();
+          setBadge(resultBadgeEl, "キャッシュ消去", "ok");
+          setMessageBanner(`キャッシュを削除しました: ${cacheKey}`, "ok");
+          appendLog(`キャッシュ消去: ${cacheKey} = null`);
+        } catch (err) {
+          setBadge(resultBadgeEl, "エラー", "err");
+          setMessageBanner(`キャッシュ消去に失敗しました: ${formatError(err)}`, "err");
+          appendLog(`キャッシュ消去エラー: ${formatError(err)}`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function fetchDatabaseAndExtractDataSourceId(dbId) {
+        const res = await window.DD.connect.request({
+          connection: "notion",
+          method: "GET",
+          path: `/v1/databases/${encodeURIComponent(dbId)}`,
+        });
+        const dsId = res?.data?.data_sources?.[0]?.id;
+        return { res, dataSourceId: typeof dsId === "string" && dsId.trim() !== "" ? dsId : null };
+      }
+
+      /**
+       * data_source_id 解決 + クエリ実行（404 または object_not_found 時のみ1回再解決リトライ）
+       */
+      async function queryDatabaseWithResolution({ dbId, queryBody, localDateLabel }) {
+        const cacheKey = getCacheKey(dbId);
+        let dataSourceId = await window.DD.storage.get(cacheKey);
+        let cacheStatus = "HIT";
+        let retried = false;
+
+        if (typeof dataSourceId !== "string" || dataSourceId.trim() === "") {
+          cacheStatus = "MISS";
+          appendLog(`data_source_id キャッシュ MISS -> GET /v1/databases/${dbId}`);
+          const resolved = await fetchDatabaseAndExtractDataSourceId(dbId);
+          if (!resolved.res.ok || !resolved.dataSourceId) {
+            return {
+              ok: false,
+              stage: "resolve_database",
+              cacheStatus,
+              retried,
+              localDate: localDateLabel,
+              dataSourceId: resolved.dataSourceId,
+              res: resolved.res,
+            };
+          }
+          dataSourceId = resolved.dataSourceId;
+          await window.DD.storage.set(cacheKey, dataSourceId);
+          await refreshCachedDataSourceDisplay();
+          appendLog(`data_source_id 解決・保存: ${dataSourceId}`);
+        } else {
+          appendLog(`data_source_id キャッシュ HIT: ${dataSourceId}`);
+        }
+
+        let queryRes = await window.DD.connect.request({
+          connection: "notion",
+          method: "POST",
+          path: `/v1/data_sources/${encodeURIComponent(dataSourceId)}/query`,
+          body: queryBody,
+        });
+
+        const shouldRetry =
+          queryRes.status === 404 || queryRes.data?.code === "object_not_found";
+
+        if (shouldRetry) {
+          retried = true;
+          appendLog(
+            `クエリ応答 (${queryRes.status} / ${queryRes.data?.code || "-"}) -> data_source_id 再解決して1回リトライ`
+          );
+          const refreshed = await fetchDatabaseAndExtractDataSourceId(dbId);
+          if (!refreshed.res.ok || !refreshed.dataSourceId) {
+            return {
+              ok: false,
+              stage: "re_resolve_database",
+              cacheStatus,
+              retried,
+              localDate: localDateLabel,
+              dataSourceId: refreshed.dataSourceId,
+              res: refreshed.res,
+            };
+          }
+          dataSourceId = refreshed.dataSourceId;
+          await window.DD.storage.set(cacheKey, dataSourceId);
+          await refreshCachedDataSourceDisplay();
+          appendLog(`data_source_id 更新: ${dataSourceId}`);
+
+          queryRes = await window.DD.connect.request({
+            connection: "notion",
+            method: "POST",
+            path: `/v1/data_sources/${encodeURIComponent(dataSourceId)}/query`,
+            body: queryBody,
+          });
+        }
+
+        return {
+          ok: Boolean(queryRes.ok),
+          stage: "query",
+          cacheStatus,
+          retried,
+          localDate: localDateLabel,
+          dataSourceId,
+          res: queryRes,
+        };
+      }
+
+      async function runConnectionTest() {
+        if (!requireBridgeOrNotify()) return;
+        clearRenderedDetails();
+        setBusy(true);
+        appendLog("実行: ① 接続テスト GET /v1/users/me");
+        try {
+          const res = await window.DD.connect.request({
+            connection: "notion",
+            method: "GET",
+            path: "/v1/users/me",
+          });
+          renderJsonPreview(res.data);
+          updateExecutionMetrics({
+            cacheStatus: "N/A",
+            httpStatus: res.status,
+            httpTone: res.ok ? "ok" : "err",
+            localDate: getLocalTodayYmd(),
+            retried: "なし",
+            dataSourceId: "-",
+          });
+
+          if (res.ok) {
+            renderUserInfo(res.data);
+            setBadge(resultBadgeEl, `HTTP ${res.status} OK`, "ok");
+            setMessageBanner(
+              `接続成功: Bot「${res.data?.name || "Unknown"}」(id: ${res.data?.id || "-"})`,
+              "ok"
+            );
+            appendLog(`接続テスト成功: HTTP ${res.status} (${res.data?.name || "-"})`);
+          } else {
+            setBadge(resultBadgeEl, `HTTP ${res.status} ERROR`, "err");
+            setMessageBanner(
+              `Notion API エラー (HTTP ${res.status}): ${res.data?.message || res.data?.code || "詳細を JSON で確認してください"}`,
+              "err"
+            );
+            appendLog(`接続テスト失敗: HTTP ${res.status} (${res.data?.code || "-"})`);
+          }
+        } catch (err) {
+          const msg = formatError(err);
+          setBadge(resultBadgeEl, "REJECTED", "err");
+          setMessageBanner(`リクエストが拒否/失敗しました: ${msg}`, "err");
+          updateExecutionMetrics({
+            cacheStatus: "N/A",
+            httpStatus: "REJECTED",
+            httpTone: "err",
+            localDate: getLocalTodayYmd(),
+            retried: "なし",
+            dataSourceId: "-",
+          });
+          renderJsonPreview({ rejected: true, error: msg });
+          appendLog(`接続テストエラー: ${msg}`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function runQueryAction(mode) {
+        if (!requireBridgeOrNotify()) return;
+        const dbId = updateDbIdPreview();
+        if (!dbId) {
+          clearRenderedDetails();
+          setBadge(resultBadgeEl, "入力不足", "warn");
+          setMessageBanner("Database ID を入力してください。", "err");
+          return;
+        }
+
+        const dateProp = datePropInput.value.trim();
+        const todayLocal = getLocalTodayYmd();
+        let queryBody;
+        let actionLabel;
+
+        if (mode === "today") {
+          if (dateProp !== "") {
+            queryBody = {
+              filter: {
+                property: dateProp,
+                date: { equals: todayLocal },
+              },
+            };
+            actionLabel = `② 今日のタスク取得 (${dateProp} = ${todayLocal})`;
+          } else {
+            queryBody = { page_size: 20 };
+            actionLabel = "② 今日のタスク取得 (日付プロパティ空欄のためフィルタなし page_size=20)";
+          }
+        } else {
+          queryBody = { page_size: 10 };
+          actionLabel = "③ 全件クエリ (フィルタなし page_size=10)";
+        }
+
+        clearRenderedDetails();
+        setBusy(true);
+        appendLog(`実行: ${actionLabel}`);
+
+        try {
+          const outcome = await queryDatabaseWithResolution({
+            dbId,
+            queryBody,
+            localDateLabel: todayLocal,
+          });
+          const res = outcome.res;
+
+          renderJsonPreview(res.data);
+          updateExecutionMetrics({
+            cacheStatus: outcome.cacheStatus,
+            httpStatus: res.status,
+            httpTone: outcome.ok ? "ok" : "err",
+            localDate: outcome.localDate,
+            retried: outcome.retried ? "あり (1回リトライ)" : "なし",
+            dataSourceId: outcome.dataSourceId || "(未解決)",
+          });
+
+          if (outcome.ok) {
+            renderQueryResults(res.data);
+            const count = Array.isArray(res.data?.results) ? res.data.results.length : 0;
+            setBadge(resultBadgeEl, `HTTP ${res.status} (${count}件)`, "ok");
+            setMessageBanner(
+              `${actionLabel} 完了: ${count} 件取得 (cache=${outcome.cacheStatus}, retry=${outcome.retried ? "yes" : "no"})`,
+              "ok"
+            );
+            appendLog(`クエリ成功: HTTP ${res.status}, ${count}件`);
+          } else {
+            const errCode = res.data?.code || "-";
+            const errMsg = res.data?.message || "詳細を JSON プレビューで確認してください";
+            const stageHint =
+              outcome.stage === "resolve_database" || outcome.stage === "re_resolve_database"
+                ? outcome.dataSourceId === null && res.ok
+                  ? "GET /v1/databases/{id} の応答に data_sources[0].id が含まれていません"
+                  : `DB 情報取得失敗 (HTTP ${res.status})`
+                : `クエリ失敗 (HTTP ${res.status})`;
+
+            setBadge(resultBadgeEl, `HTTP ${res.status} ERROR`, "err");
+            setMessageBanner(`${stageHint}: [${errCode}] ${errMsg}`, "err");
+            appendLog(`${stageHint}: ${errCode}`);
+          }
+        } catch (err) {
+          const msg = formatError(err);
+          setBadge(resultBadgeEl, "REJECTED", "err");
+          setMessageBanner(`リクエストが拒否/失敗しました: ${msg}`, "err");
+          updateExecutionMetrics({
+            cacheStatus: "-",
+            httpStatus: "REJECTED",
+            httpTone: "err",
+            localDate: todayLocal,
+            retried: "なし",
+            dataSourceId: "-",
+          });
+          renderJsonPreview({ rejected: true, error: msg });
+          appendLog(`クエリエラー: ${msg}`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function runNegativePatchTest() {
+        if (!requireBridgeOrNotify()) return;
+        clearRenderedDetails();
+        setBusy(true);
+        const todayLocal = getLocalTodayYmd();
+        appendLog("実行: ④ 負テスト PATCH /v1/pages/test");
+
+        try {
+          const res = await window.DD.connect.request({
+            connection: "notion",
+            method: "PATCH",
+            path: "/v1/pages/test",
+            body: { properties: {} },
+          });
+          setBadge(resultBadgeEl, "FAIL (通過)", "err");
+          setMessageBanner(
+            `警告: 未許可エンドポイント PATCH /v1/pages/test がガードを通過しました (HTTP ${res.status})`,
+            "err"
+          );
+          updateExecutionMetrics({
+            cacheStatus: "N/A",
+            httpStatus: res.status,
+            httpTone: "err",
+            localDate: todayLocal,
+            retried: "なし",
+            dataSourceId: "-",
+          });
+          renderJsonPreview(res);
+          appendLog(`負テスト FAIL: ガードを通過 (HTTP ${res.status})`);
+        } catch (err) {
+          const msg = formatError(err);
+          setBadge(resultBadgeEl, "PASS (拒否確認)", "ok");
+          setMessageBanner(`期待通りガードで拒否されました: ${msg}`, "ok");
+          updateExecutionMetrics({
+            cacheStatus: "N/A",
+            httpStatus: "REJECTED (期待通り)",
+            httpTone: "ok",
+            localDate: todayLocal,
+            retried: "なし",
+            dataSourceId: "-",
+          });
+          renderJsonPreview({ expectedRejection: true, error: msg });
+          appendLog(`負テスト PASS: ガード拒否 (${msg})`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function buildIframeIsolationSrcdoc(nonce) {
+        const safeNonce = JSON.stringify(nonce);
+        return (
+          "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><script>" +
+          "(async function(){" +
+          "var nonce=" + safeNonce + ";" +
+          "try{" +
+          "  var isSubframe=false;" +
+          "  try{isSubframe=(window!==window.top);}catch(_){isSubframe=true;}" +
+          "  var ddType=typeof window.DD;" +
+          "  var hasNoDD=(ddType===\"undefined\");" +
+          "  var hasInternals=(typeof window.__TAURI_INTERNALS__!==\"undefined\"&&window.__TAURI_INTERNALS__!==null);" +
+          "  var hasInvoke=(hasInternals&&typeof window.__TAURI_INTERNALS__.invoke===\"function\");" +
+          "  var invokeBlocked=false;" +
+          "  var invokeDetail=\"\";" +
+          "  var unexpectedResult=null;" +
+          "  if(!hasInvoke){" +
+          "    invokeBlocked=true;" +
+          "    invokeDetail=\"__TAURI_INTERNALS__.invoke is undefined\";" +
+          "  }else{" +
+          "    try{" +
+          "      unexpectedResult=await window.__TAURI_INTERNALS__.invoke(\"dd_connect_request\",{request:{connection:\"notion\",method:\"GET\",path:\"/v1/users/me\",body:null}});" +
+          "      invokeBlocked=false;" +
+          "      invokeDetail=\"unexpectedly resolved\";" +
+          "    }catch(err){" +
+          "      invokeBlocked=true;" +
+          "      invokeDetail=(typeof err===\"string\")?err:(err&&err.message?err.message:String(err));" +
+          "    }" +
+          "  }" +
+          "  var originStr=\"\";" +
+          "  try{originStr=String(location.origin);}catch(_){originStr=\"(inaccessible)\";}" +
+          "  var passed=Boolean(isSubframe&&hasNoDD&&invokeBlocked);" +
+          "  parent.postMessage({type:\"dd-iframe-isolation-test\",nonce:nonce,origin:originStr,isSubframe:isSubframe,ddType:ddType,hasNoDD:hasNoDD,hasTauriInternals:hasInternals,hasInvoke:hasInvoke,invokeBlocked:invokeBlocked,invokeDetail:invokeDetail,unexpectedResult:unexpectedResult,passed:passed},\"*\");" +
+          "}catch(fatal){" +
+          "  parent.postMessage({type:\"dd-iframe-isolation-test\",nonce:nonce,passed:false,fatalError:String(fatal)},\"*\");" +
+          "}" +
+          "})();" +
+          "<" + "/script></body></html>"
+        );
+      }
+
+      async function runNegativeIframeTest() {
+        clearRenderedDetails();
+        setBusy(true);
+        const todayLocal = getLocalTodayYmd();
+        const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        appendLog("実行: ⑤ 負テスト sandbox iframe 隔離確認");
+
+        const iframe = document.createElement("iframe");
+        iframe.setAttribute("sandbox", "allow-scripts");
+        iframe.hidden = true;
+        iframe.style.display = "none";
+
+        let timeoutId = null;
+        let onMessage = null;
+
+        try {
+          const result = await new Promise((resolve, reject) => {
+            onMessage = (event) => {
+              if (event.source !== iframe.contentWindow) return;
+              const data = event.data;
+              if (!data || data.type !== "dd-iframe-isolation-test" || data.nonce !== nonce) {
+                return;
+              }
+              resolve(data);
+            };
+
+            window.addEventListener("message", onMessage);
+            timeoutId = setTimeout(() => {
+              reject(new Error("iframe 隔離テストがタイムアウトしました (5000ms)"));
+            }, 5000);
+
+            iframe.srcdoc = buildIframeIsolationSrcdoc(nonce);
+            document.body.appendChild(iframe);
+          });
+
+          const detailPayload = {
+            parentHasDD: hasBridge(),
+            ...result,
+          };
+          jsonDetailsEl.open = true;
+          renderJsonPreview(detailPayload);
+
+          if (result.passed) {
+            setBadge(resultBadgeEl, "PASS (隔離確認)", "ok");
+            setMessageBanner(
+              `期待通り iframe 隔離を確認しました (window.DD=${result.ddType}, invoke拒否: ${result.invokeDetail})`,
+              "ok"
+            );
+            updateExecutionMetrics({
+              cacheStatus: "N/A",
+              httpStatus: "ISOLATED (期待通り)",
+              httpTone: "ok",
+              localDate: todayLocal,
+              retried: "なし",
+              dataSourceId: "-",
+            });
+            appendLog(
+              `負テスト⑤ PASS: isSubframe=${result.isSubframe}, DD=${result.ddType}, invokeBlocked=${result.invokeBlocked}`
+            );
+          } else {
+            setBadge(resultBadgeEl, "FAIL (隔離不備)", "err");
+            setMessageBanner(
+              `警告: iframe 隔離チェックに失敗しました (isSubframe=${result.isSubframe}, ddType=${result.ddType}, invokeBlocked=${result.invokeBlocked})`,
+              "err"
+            );
+            updateExecutionMetrics({
+              cacheStatus: "N/A",
+              httpStatus: "ISOLATION FAILED",
+              httpTone: "err",
+              localDate: todayLocal,
+              retried: "なし",
+              dataSourceId: "-",
+            });
+            appendLog(
+              `負テスト⑤ FAIL: isSubframe=${result.isSubframe}, DD=${result.ddType}, invokeBlocked=${result.invokeBlocked}`
+            );
+          }
+        } catch (err) {
+          const msg = formatError(err);
+          jsonDetailsEl.open = true;
+          setBadge(resultBadgeEl, "FAIL (エラー)", "err");
+          setMessageBanner(`iframe 隔離テスト中にエラーが発生しました: ${msg}`, "err");
+          updateExecutionMetrics({
+            cacheStatus: "N/A",
+            httpStatus: "TEST ERROR",
+            httpTone: "err",
+            localDate: todayLocal,
+            retried: "なし",
+            dataSourceId: "-",
+          });
+          renderJsonPreview({ parentHasDD: hasBridge(), error: msg });
+          appendLog(`負テスト⑤ エラー: ${msg}`);
+        } finally {
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+          }
+          if (onMessage !== null) {
+            window.removeEventListener("message", onMessage);
+          }
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+          setBusy(false);
+        }
+      }
+
+      dbIdInput.addEventListener("input", () => {
+        setBadge(settingsBadgeEl, "未保存変更", "warn");
+        void refreshCachedDataSourceDisplay();
+      });
+
+      datePropInput.addEventListener("input", () => {
+        setBadge(settingsBadgeEl, "未保存変更", "warn");
+      });
+
+      saveBtn.addEventListener("click", () => {
+        void saveSettings();
+      });
+
+      reloadBtn.addEventListener("click", () => {
+        void loadSettings();
+      });
+
+      clearCacheBtn.addEventListener("click", () => {
+        void clearDataSourceCache();
+      });
+
+      testMeBtn.addEventListener("click", () => {
+        void runConnectionTest();
+      });
+
+      queryTodayBtn.addEventListener("click", () => {
+        void runQueryAction("today");
+      });
+
+      queryAllBtn.addEventListener("click", () => {
+        void runQueryAction("all");
+      });
+
+      negPatchBtn.addEventListener("click", () => {
+        void runNegativePatchTest();
+      });
+
+      negIframeBtn.addEventListener("click", () => {
+        void runNegativeIframeTest();
+      });
+
+      updateEnvironmentStatus();
+      setInterval(updateEnvironmentStatus, 30000);
+      void loadSettings();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "widgets-dd",
+  "description": "Allow only local custom-protocol origins (widgetfile.localhost) in widget windows to invoke DD bridge commands",
+  "windows": ["widget-*"],
+  "local": true,
+  "permissions": [
+    "allow-dd-storage-get",
+    "allow-dd-storage-set",
+    "allow-dd-connect-request"
+  ]
+}

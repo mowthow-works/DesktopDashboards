@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod dd_bridge;
 mod tray;
 mod widget;
 mod win32;
@@ -722,6 +723,10 @@ pub fn run() {
             sync_autostart_on_startup(app.handle(), &config_state);
             app.manage(config_state);
 
+            if let Err(e) = dd_bridge::ensure_connections_template_for_app(app.handle()) {
+                eprintln!("[dd_bridge] failed to ensure connections.json template: {e}");
+            }
+
             if let Some(manager_win) = app.get_webview_window("manager") {
                 let win_clone = manager_win.clone();
                 manager_win.on_window_event(move |event| {
@@ -762,6 +767,9 @@ pub fn run() {
             reload_all_widgets,
             get_autostart,
             set_autostart,
+            dd_bridge::dd_storage_get,
+            dd_bridge::dd_storage_set,
+            dd_bridge::dd_connect_request,
         ])
         .build(tauri::generate_context!())
         .expect("error while building DesktopDashboards");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dd-storage-get"
+description = "Enables the dd_storage_get command without any pre-configured scope."
+commands.allow = ["dd_storage_get"]
+
+[[permission]]
+identifier = "deny-dd-storage-get"
+description = "Denies the dd_storage_get command without any pre-configured scope."
+commands.deny = ["dd_storage_get"]

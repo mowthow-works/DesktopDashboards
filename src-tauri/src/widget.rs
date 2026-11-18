@@ -15,18 +15,68 @@ pub fn widget_label(widget_id: &str) -> String {
     format!("widget-{widget_id}")
 }
 
-/// ガジェット用 WebView ランタイムスクリプト（ホバー操作バー + リロードガード + カスタムCSS）を生成する。
-fn build_widget_init_script(locked: bool, home_url: &str, custom_css: &str) -> String {
+/// ガジェット用 WebView ランタイムスクリプト（ホバー操作バー + リロードガード + カスタムCSS + Fileガジェット向けDDブリッジ）を生成する。
+fn build_widget_init_script(
+    locked: bool,
+    home_url: &str,
+    custom_css: &str,
+    inject_dd_bridge: bool,
+) -> String {
     let home_json = serde_json::to_string(home_url).unwrap_or_else(|_| "\"\"".to_string());
     let css_json = serde_json::to_string(custom_css).unwrap_or_else(|_| "\"\"".to_string());
     let locked_str = if locked { "true" } else { "false" };
+    let dd_bridge_script = if inject_dd_bridge {
+        r#"
+  if (window === window.top && location.origin === 'http://widgetfile.localhost' && !window.DD) {
+    const invokeBridge = (cmd, payload) => {
+      if (!window.__TAURI_INTERNALS__ || typeof window.__TAURI_INTERNALS__.invoke !== 'function') {
+        return Promise.reject(new Error('Tauri internals unavailable'));
+      }
+      return window.__TAURI_INTERNALS__.invoke(cmd, payload);
+    };
+    const storage = Object.freeze({
+      get(key) {
+        return invokeBridge('dd_storage_get', { key: String(key) });
+      },
+      set(key, value) {
+        return invokeBridge('dd_storage_set', {
+          key: String(key),
+          value: value === undefined ? null : value,
+        });
+      },
+    });
+    const connect = Object.freeze({
+      request(opts) {
+        const { connection, method, path, body } = opts || {};
+        return invokeBridge('dd_connect_request', {
+          request: {
+            connection: String(connection || ''),
+            method: String(method || 'GET'),
+            path: String(path || ''),
+            body: body === undefined ? null : body,
+          },
+        });
+      },
+    });
+    Object.defineProperty(window, 'DD', {
+      value: Object.freeze({ storage, connect }),
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
+  }
+"#
+    } else {
+        ""
+    };
 
     format!(
         r#"
 (() => {{
+  if (window !== window.top) return;
   if (window.__ddRuntimeInstalled) return;
   window.__ddRuntimeInstalled = true;
-
+{dd_bridge_script}
   const HOME_URL = {home_json};
   let isLocked = {locked_str};
   let currentCustomCss = {css_json};
@@ -305,7 +355,13 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
         .max(1.0);
     let target_w = widget.width.max(120);
     let target_h = widget.height.max(80);
-    let init_script = build_widget_init_script(widget.locked, &home_url_str, &widget.custom_css);
+    let inject_dd_bridge = widget.source_type == SourceType::File;
+    let init_script = build_widget_init_script(
+        widget.locked,
+        &home_url_str,
+        &widget.custom_css,
+        inject_dd_bridge,
+    );
 
     let mut builder = WebviewWindowBuilder::new(&app, &label, webview_url)
         .title(&widget.title)
@@ -672,5 +728,26 @@ mod tests {
         assert!(!is_same_origin_or_internal(&base, &diff_host));
         assert!(!is_same_origin_or_internal(&base, &diff_scheme));
         assert!(is_same_origin_or_internal(&base, &about));
+    }
+
+    #[test]
+    fn init_script_injects_dd_bridge_only_for_file_widgets() {
+        let file_script =
+            build_widget_init_script(false, "http://widgetfile.localhost/w1/", "", true);
+        assert!(file_script.contains("if (window !== window.top) return;"));
+        assert!(file_script.contains(
+            "window === window.top && location.origin === 'http://widgetfile.localhost' && !window.DD"
+        ));
+        assert!(file_script.contains("Object.defineProperty(window, 'DD'"));
+        assert!(file_script.contains("dd_storage_get"));
+        assert!(file_script.contains("dd_storage_set"));
+        assert!(file_script.contains("dd_connect_request"));
+
+        let url_script = build_widget_init_script(false, "https://example.com/", "", false);
+        assert!(url_script.contains("if (window !== window.top) return;"));
+        assert!(!url_script.contains("Object.defineProperty(window, 'DD'"));
+        assert!(!url_script.contains("dd_storage_get"));
+        assert!(!url_script.contains("dd_storage_set"));
+        assert!(!url_script.contains("dd_connect_request"));
     }
 }
