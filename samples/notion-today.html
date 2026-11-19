@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notion 今日のタスク - DesktopDashboards</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #12151b;
+      --panel: #1b2029;
+      --panel-sub: #141820;
+      --border: #2c3442;
+      --text: #eef2f6;
+      --muted: #94a3b8;
+      --subtle: #64748b;
+      --accent: #38bdf8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    [hidden] {
+      display: none !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    /* 上端 28px はロック解除時のホバー操作バーと重ならないよう余白を確保 */
+    body {
+      padding: 34px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .date-badge {
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.32);
+      white-space: nowrap;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .count-pill {
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .count-pill.ok {
+      color: var(--green);
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.1);
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background-color 0.15s;
+    }
+    button:hover:not(:disabled) {
+      opacity: 0.92;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 14px;
+    }
+    .icon-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .primary-btn {
+      padding: 7px 12px;
+      background: var(--primary);
+      color: #fff;
+    }
+    .primary-btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .error-banner {
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.42);
+      border-radius: 9px;
+      padding: 9px 11px;
+      color: #fecaca;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+    }
+    .error-banner[hidden] {
+      display: none;
+    }
+    .error-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 600;
+      color: var(--red);
+    }
+    .error-close {
+      background: transparent;
+      color: #fca5a5;
+      padding: 0 5px;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .error-hint {
+      font-size: 11px;
+      color: #fde68a;
+    }
+    .setup-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .setup-desc {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .setup-steps {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    code {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 11px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #0f1217;
+      border: 1px solid #2b3444;
+      color: #7dd3fc;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 20px 12px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .empty-state strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+    .empty-sub {
+      font-size: 11px;
+      color: var(--subtle);
+    }
+    .task-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .task-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--panel-sub);
+      border: 1px solid #242b38;
+      transition: border-color 0.15s, opacity 0.15s;
+    }
+    .task-item:hover {
+      border-color: #364154;
+    }
+    .task-item.overdue {
+      border-left: 3px solid var(--amber);
+    }
+    .task-item.done {
+      opacity: 0.62;
+    }
+    .task-check {
+      margin-top: 2px;
+      width: 15px;
+      height: 15px;
+      accent-color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .task-check:disabled {
+      cursor: wait;
+    }
+    .task-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .task-title-btn {
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin: 0;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      word-break: break-word;
+      line-height: 1.45;
+      cursor: pointer;
+    }
+    .task-title-btn:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    .task-title-btn.no-url {
+      cursor: default;
+    }
+    .task-title-btn.no-url:hover {
+      color: var(--text);
+      text-decoration: none;
+    }
+    .task-item.done .task-title-btn {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+    .pill {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #0f1217;
+      border: 1px solid #293244;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .pill.overdue {
+      color: #fde68a;
+      border-color: rgba(251, 191, 36, 0.4);
+      background: rgba(251, 191, 36, 0.12);
+    }
+    .pill.time {
+      color: #bae6fd;
+      border-color: rgba(56, 189, 248, 0.3);
+      background: rgba(56, 189, 248, 0.1);
+    }
+    .loading-text {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      padding: 16px 8px;
+    }
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 10px;
+      color: var(--subtle);
+      padding: 0 2px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>今日のタスク</h1>
+      <span class="date-badge" id="today-label">----/--/--</span>
+    </div>
+    <div class="header-right">
+      <span class="count-pill" id="count-pill">-</span>
+      <button type="button" class="icon-btn" id="btn-refresh" title="再読み込み">↻</button>
+    </div>
+  </header>
+
+  <div class="error-banner" id="error-banner" hidden>
+    <div class="error-head">
+      <span id="error-title">エラー</span>
+      <button type="button" class="error-close" id="btn-error-close" title="閉じる">×</button>
+    </div>
+    <div id="error-detail"></div>
+    <div class="error-hint" id="error-hint" hidden></div>
+  </div>
+
+  <section class="card" id="setup-card" hidden>
+    <p class="setup-title" id="setup-title">初期設定が必要です</p>
+    <p class="setup-desc" id="setup-reason"></p>
+    <ol class="setup-steps">
+      <li>Notion 開発者コンソールで <code>+ New connection</code> → 名前入力 → <code>API token</code> を作成（<code>Read content</code> / <code>Update content</code> を有効化）</li>
+      <li>管理画面の「外部サービス接続（SaaS 連携）」で Notion 接続（例: 接続 ID <code>notion</code>）を保存</li>
+      <li>Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト</code>（または <code>Content access</code>）から共有</li>
+      <li>管理画面のこのガジェットカード内「⚙ ウィジェット設定（<code>DD.config</code>）」へ接続 ID とデータベース ID / URL を入力して保存</li>
+    </ol>
+    <div>
+      <button type="button" class="primary-btn" id="btn-open-console">Notion 開発者コンソールを開く ↗</button>
+    </div>
+  </section>
+
+  <section class="card" id="tasks-card">
+    <div class="loading-text" id="loading-view">読み込み中...</div>
+    <div class="empty-state" id="empty-view" hidden>
+      <strong id="empty-title">今日のタスクはありません</strong>
+      <span class="empty-sub" id="empty-sub"></span>
+    </div>
+    <ul class="task-list" id="task-list" hidden></ul>
+  </section>
+
+  <footer>
+    <span id="footer-props">プロパティ: -</span>
+    <span id="footer-updated">最終更新: -</span>
+  </footer>
+
+  <script>
+    (() => {
+      const NOTION_CONSOLE_URL = "https://app.notion.com/developers/connections";
+      const CACHE_KEY_PREFIX = "notion:data_source_id:";
+      const MAX_QUERY_PAGES = 10;
+      const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+      const todayLabelEl = document.getElementById("today-label");
+      const countPillEl = document.getElementById("count-pill");
+      const refreshBtn = document.getElementById("btn-refresh");
+
+      const errorBannerEl = document.getElementById("error-banner");
+      const errorTitleEl = document.getElementById("error-title");
+      const errorDetailEl = document.getElementById("error-detail");
+      const errorHintEl = document.getElementById("error-hint");
+      const errorCloseBtn = document.getElementById("btn-error-close");
+
+      const setupCardEl = document.getElementById("setup-card");
+      const setupTitleEl = document.getElementById("setup-title");
+      const setupReasonEl = document.getElementById("setup-reason");
+      const openConsoleBtn = document.getElementById("btn-open-console");
+
+      const tasksCardEl = document.getElementById("tasks-card");
+      const loadingViewEl = document.getElementById("loading-view");
+      const emptyViewEl = document.getElementById("empty-view");
+      const emptyTitleEl = document.getElementById("empty-title");
+      const emptySubEl = document.getElementById("empty-sub");
+      const taskListEl = document.getElementById("task-list");
+
+      const footerPropsEl = document.getElementById("footer-props");
+      const footerUpdatedEl = document.getElementById("footer-updated");
+
+      let currentConfig = null;
+      let currentConnectionId = "";
+      let currentDbId = "";
+      let currentTasks = [];
+      let currentHiddenDoneCount = 0;
+      let currentSchema = { titleProp: null, dateProp: null, doneProp: null };
+      let isLoading = false;
+
+      function pad2(n) {
+        return String(n).padStart(2, "0");
+      }
+
+      /**
+       * ローカルタイムゾーンで YYYY-MM-DD を組み立てる
+       */
+      function formatLocalYmd(date) {
+        return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+      }
+
+      function getLocalTodayYmd() {
+        return formatLocalYmd(new Date());
+      }
+
+      function addLocalDaysYmd(baseDate, deltaDays) {
+        const d = new Date(
+          baseDate.getFullYear(),
+          baseDate.getMonth(),
+          baseDate.getDate() + deltaDays
+        );
+        return formatLocalYmd(d);
+      }
+
+      function formatLocalTimeHms(date) {
+        return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+      }
+
+      function updateTodayBadge() {
+        const now = new Date();
+        todayLabelEl.textContent = `${formatLocalYmd(now)} (${WEEKDAYS_JA[now.getDay()]})`;
+      }
+
+      /**
+       * Notion DB URL または 32桁16進数 / ハイフン付き UUID から正規化 UUID (8-4-4-4-12) を抽出
+       */
+      function extractDatabaseId(raw) {
+        const trimmed = String(raw || "").trim();
+        if (!trimmed) return null;
+
+        const pathPart = trimmed.split(/[?#]/)[0].replace(/\/+$/, "");
+        const uuidMatches = pathPart.match(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+        );
+        let hex32 = "";
+        if (uuidMatches && uuidMatches.length > 0) {
+          hex32 = uuidMatches[uuidMatches.length - 1].replace(/-/g, "").toLowerCase();
+        } else {
+          const hexMatches = pathPart.match(/[0-9a-f]{32}/gi);
+          if (hexMatches && hexMatches.length > 0) {
+            hex32 = hexMatches[hexMatches.length - 1].toLowerCase();
+          }
+        }
+
+        if (hex32.length !== 32) return null;
+        return `${hex32.slice(0, 8)}-${hex32.slice(8, 12)}-${hex32.slice(12, 16)}-${hex32.slice(16, 20)}-${hex32.slice(20, 32)}`;
+      }
+
+      /**
+       * Notion date プロパティの start / end をローカル日付 YYYY-MM-DD 基準へ変換
+       */
+      function parseNotionDateValue(dateVal) {
+        if (!dateVal || typeof dateVal.start !== "string" || !dateVal.start) {
+          return null;
+        }
+        const parseSingle = (rawStr) => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(rawStr)) {
+            return { ymd: rawStr, timeText: "" };
+          }
+          const d = new Date(rawStr);
+          if (Number.isNaN(d.getTime())) {
+            const fallback = /^(\d{4}-\d{2}-\d{2})/.exec(rawStr);
+            return fallback ? { ymd: fallback[1], timeText: "" } : null;
+          }
+          return {
+            ymd: formatLocalYmd(d),
+            timeText: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
+          };
+        };
+
+        const startInfo = parseSingle(dateVal.start);
+        if (!startInfo) return null;
+        const endInfo = typeof dateVal.end === "string" && dateVal.end ? parseSingle(dateVal.end) : null;
+
+        return {
+          startYmd: startInfo.ymd,
+          startTime: startInfo.timeText,
+          endYmd: endInfo ? endInfo.ymd : null,
+        };
+      }
+
+      function hasBridge() {
+        return (
+          typeof window.DD !== "undefined" &&
+          window.DD !== null &&
+          typeof window.DD.storage?.get === "function" &&
+          typeof window.DD.storage?.set === "function" &&
+          typeof window.DD.connect?.request === "function" &&
+          typeof window.DD.config?.get === "function" &&
+          typeof window.DD.openUrl === "function"
+        );
+      }
+
+      function formatErrorMessage(err) {
+        if (typeof err === "string") return err;
+        if (err && typeof err.message === "string") return err.message;
+        try {
+          return JSON.stringify(err);
+        } catch (_) {
+          return String(err);
+        }
+      }
+
+      function buildNotionErrorGuidance(status, code, rawMessage) {
+        const lowerMsg = String(rawMessage || "").toLowerCase();
+        if (status === 404 || code === "object_not_found") {
+          return {
+            title: "対象データベース／ページが見つかりません (404 / object_not_found)",
+            hint: "Notion 側の対象データベース右上の「⋯」→「コネクト (Connections)」からインテグレーションを追加するか、開発者コンソールの「Content access」タブで共有設定を確認してください。",
+          };
+        }
+        if (
+          status === 401 ||
+          code === "unauthorized" ||
+          lowerMsg.includes("credential") ||
+          lowerMsg.includes("資格情報") ||
+          lowerMsg.includes("token") ||
+          lowerMsg.includes("ダミー")
+        ) {
+          return {
+            title: "Notion 認証エラーまたはトークン未設定",
+            hint: "管理画面の「外部サービス接続（SaaS 連携）」で接続 ID と有効な API トークン（ntn_...）を設定または差し替えてください。",
+          };
+        }
+        if (status === 403 || code === "restricted_resource") {
+          return {
+            title: "権限不足エラー (403 / restricted_resource)",
+            hint: "Notion 開発者コンソールの Capabilities で「Read content」およびチェック更新を行う場合は「Update content」権限が有効になっているか確認してください。",
+          };
+        }
+        return {
+          title: status ? `Notion API エラー (HTTP ${status})` : "通信・設定エラー",
+          hint: "",
+        };
+      }
+
+      function showError(title, detail, hint = "") {
+        errorTitleEl.textContent = title;
+        errorDetailEl.textContent = detail;
+        if (hint) {
+          errorHintEl.textContent = hint;
+          errorHintEl.hidden = false;
+        } else {
+          errorHintEl.textContent = "";
+          errorHintEl.hidden = true;
+        }
+        errorBannerEl.hidden = false;
+      }
+
+      function hideError() {
+        errorBannerEl.hidden = true;
+        errorTitleEl.textContent = "";
+        errorDetailEl.textContent = "";
+        errorHintEl.textContent = "";
+        errorHintEl.hidden = true;
+      }
+
+      function applyViewVisibility({ setup = false, loading = false, empty = false, list = false }) {
+        setupCardEl.hidden = !setup;
+        tasksCardEl.hidden = setup;
+        loadingViewEl.hidden = !loading;
+        emptyViewEl.hidden = !empty;
+        taskListEl.hidden = !list;
+      }
+
+      function showSetupState(title, reason) {
+        setupTitleEl.textContent = title;
+        setupReasonEl.textContent = reason;
+        applyViewVisibility({ setup: true });
+        countPillEl.textContent = "未設定";
+        countPillEl.className = "count-pill";
+        footerPropsEl.textContent = "プロパティ: -";
+      }
+
+      function showTasksLoading() {
+        applyViewVisibility({ loading: true });
+      }
+
+      function detectSchemaFromPropertiesMap(propsObj, preferredDateProp, preferredDoneProp) {
+        let titleProp = null;
+        let detectedDateProp = null;
+        let detectedDoneProp = null;
+
+        if (propsObj && typeof propsObj === "object") {
+          for (const [propName, propDef] of Object.entries(propsObj)) {
+            if (!propDef || typeof propDef !== "object") continue;
+            if (!titleProp && propDef.type === "title") {
+              titleProp = propName;
+            }
+            if (!detectedDateProp && propDef.type === "date") {
+              detectedDateProp = propName;
+            }
+            if (!detectedDoneProp && propDef.type === "checkbox") {
+              detectedDoneProp = propName;
+            }
+          }
+        }
+
+        return {
+          titleProp,
+          dateProp: preferredDateProp || detectedDateProp,
+          doneProp: preferredDoneProp || detectedDoneProp,
+        };
+      }
+
+      function extractTaskFromPage(page, schema, todayYmd, showOverdue) {
+        const props = page && typeof page.properties === "object" && page.properties !== null
+          ? page.properties
+          : {};
+
+        let title = "";
+        if (schema.titleProp && props[schema.titleProp]?.type === "title") {
+          const frags = Array.isArray(props[schema.titleProp].title) ? props[schema.titleProp].title : [];
+          title = frags.map((t) => t?.plain_text || "").join("");
+        } else {
+          for (const propVal of Object.values(props)) {
+            if (propVal && propVal.type === "title") {
+              const frags = Array.isArray(propVal.title) ? propVal.title : [];
+              title = frags.map((t) => t?.plain_text || "").join("");
+              break;
+            }
+          }
+        }
+
+        let datePropVal = null;
+        if (schema.dateProp && props[schema.dateProp]?.type === "date") {
+          datePropVal = props[schema.dateProp].date;
+        } else if (!schema.dateProp) {
+          for (const propVal of Object.values(props)) {
+            if (propVal && propVal.type === "date") {
+              datePropVal = propVal.date;
+              break;
+            }
+          }
+        }
+
+        const dateInfo = parseNotionDateValue(datePropVal);
+        if (!dateInfo) return null;
+
+        let done = false;
+        if (schema.doneProp && props[schema.doneProp]?.type === "checkbox") {
+          done = Boolean(props[schema.doneProp].checkbox);
+        } else if (!schema.doneProp) {
+          for (const propVal of Object.values(props)) {
+            if (propVal && propVal.type === "checkbox") {
+              done = Boolean(propVal.checkbox);
+              break;
+            }
+          }
+        }
+
+        const isToday = dateInfo.startYmd === todayYmd;
+        const isOverdue = showOverdue && dateInfo.startYmd < todayYmd && !done;
+        if (!isToday && !isOverdue) {
+          return null;
+        }
+
+        return {
+          id: page.id,
+          title: title.trim() || "(無題)",
+          done,
+          isOverdue,
+          startYmd: dateInfo.startYmd,
+          startTime: dateInfo.startTime,
+          endYmd: dateInfo.endYmd,
+          url: typeof page.url === "string" && /^https?:\/\//i.test(page.url) ? page.url : null,
+          saving: false,
+        };
+      }
+
+      function renderTaskList() {
+        const showDone = currentConfig ? currentConfig.show_done !== false : true;
+
+        const visibleTasks = currentTasks.filter((t) => showDone || !t.done);
+        const hiddenDoneCount = showDone
+          ? 0
+          : currentTasks.filter((t) => t.done).length;
+        currentHiddenDoneCount = hiddenDoneCount;
+
+        const ordered = [
+          ...visibleTasks.filter((t) => !t.done && t.isOverdue),
+          ...visibleTasks.filter((t) => !t.done && !t.isOverdue),
+          ...visibleTasks.filter((t) => t.done),
+        ];
+
+        const activeCount = currentTasks.filter((t) => !t.done).length;
+        const totalCount = currentTasks.length;
+        countPillEl.textContent = `未完了 ${activeCount} / ${totalCount}`;
+        countPillEl.className = activeCount === 0 && totalCount > 0 ? "count-pill ok" : "count-pill";
+
+        taskListEl.textContent = "";
+        if (ordered.length === 0) {
+          applyViewVisibility({ empty: true });
+          emptyTitleEl.textContent = "今日のタスクはありません";
+          emptySubEl.textContent =
+            hiddenDoneCount > 0
+              ? `完了済み ${hiddenDoneCount} 件は設定により非表示です`
+              : "新しいタスクを追加するとここに表示されます";
+          return;
+        }
+
+        applyViewVisibility({ list: true });
+
+        for (const item of ordered) {
+          const li = document.createElement("li");
+          li.className = "task-item";
+          if (item.isOverdue && !item.done) li.classList.add("overdue");
+          if (item.done) li.classList.add("done");
+
+          const chk = document.createElement("input");
+          chk.type = "checkbox";
+          chk.className = "task-check";
+          chk.checked = item.done;
+          chk.disabled = !currentSchema.doneProp || item.saving;
+          chk.title = currentSchema.doneProp
+            ? "完了状態を切り替え"
+            : "checkbox 型プロパティが未検出のため変更不可";
+          chk.addEventListener("change", () => {
+            void handleToggleDone(item, chk.checked);
+          });
+
+          const body = document.createElement("div");
+          body.className = "task-body";
+
+          const titleBtn = document.createElement("button");
+          titleBtn.type = "button";
+          titleBtn.className = item.url ? "task-title-btn" : "task-title-btn no-url";
+          titleBtn.textContent = item.title;
+          if (item.url) {
+            titleBtn.title = "Notion で開く";
+            titleBtn.addEventListener("click", async () => {
+              try {
+                await window.DD.openUrl(item.url);
+              } catch (err) {
+                showError("ブラウザ起動エラー", formatErrorMessage(err));
+              }
+            });
+          }
+          body.appendChild(titleBtn);
+
+          const meta = document.createElement("div");
+          meta.className = "task-meta";
+
+          if (item.isOverdue && !item.done) {
+            const overduePill = document.createElement("span");
+            overduePill.className = "pill overdue";
+            overduePill.textContent = `期限切れ ${item.startYmd}`;
+            meta.appendChild(overduePill);
+          }
+
+          if (item.startTime) {
+            const timePill = document.createElement("span");
+            timePill.className = "pill time";
+            timePill.textContent = item.startTime;
+            meta.appendChild(timePill);
+          }
+
+          if (item.endYmd && item.endYmd !== item.startYmd) {
+            const rangePill = document.createElement("span");
+            rangePill.className = "pill";
+            rangePill.textContent = `〜 ${item.endYmd}`;
+            meta.appendChild(rangePill);
+          }
+
+          if (meta.children.length > 0) {
+            body.appendChild(meta);
+          }
+
+          li.appendChild(chk);
+          li.appendChild(body);
+          taskListEl.appendChild(li);
+        }
+      }
+
+      async function handleToggleDone(item, nextChecked) {
+        if (!currentSchema.doneProp || item.saving) {
+          renderTaskList();
+          return;
+        }
+        const prevDone = item.done;
+        item.done = nextChecked;
+        item.saving = true;
+        hideError();
+        renderTaskList();
+
+        try {
+          const res = await window.DD.connect.request({
+            connection: currentConnectionId,
+            method: "PATCH",
+            path: `/v1/pages/${encodeURIComponent(item.id)}`,
+            body: {
+              properties: {
+                [currentSchema.doneProp]: { checkbox: nextChecked },
+              },
+            },
+          });
+
+          if (!res.ok) {
+            const code = res.data?.code || "";
+            const msg = res.data?.message || `HTTP ${res.status}`;
+            const guidance = buildNotionErrorGuidance(res.status, code, msg);
+            throw { status: res.status, code, message: msg, guidance };
+          }
+
+          item.saving = false;
+          footerUpdatedEl.textContent = `最終更新: ${formatLocalTimeHms(new Date())}`;
+          renderTaskList();
+        } catch (err) {
+          item.done = prevDone;
+          item.saving = false;
+          renderTaskList();
+
+          if (err && err.guidance) {
+            showError(
+              `完了状態の更新に失敗しました (${err.guidance.title})`,
+              `${err.code ? `[${err.code}] ` : ""}${err.message}`,
+              err.guidance.hint
+            );
+          } else {
+            const rawMsg = formatErrorMessage(err);
+            const guidance = buildNotionErrorGuidance(0, "", rawMsg);
+            showError("完了状態の更新に失敗しました", rawMsg, guidance.hint);
+          }
+        }
+      }
+
+      async function resolveDataSourceId(connectionId, dbId, forceRefresh) {
+        const cacheKey = CACHE_KEY_PREFIX + dbId;
+        if (!forceRefresh) {
+          const cached = await window.DD.storage.get(cacheKey);
+          if (typeof cached === "string" && cached.trim() !== "") {
+            return { dataSourceId: cached.trim(), usedCache: true };
+          }
+        }
+
+        const dbRes = await window.DD.connect.request({
+          connection: connectionId,
+          method: "GET",
+          path: `/v1/databases/${encodeURIComponent(dbId)}`,
+        });
+
+        if (!dbRes.ok) {
+          const code = dbRes.data?.code || "";
+          const msg = dbRes.data?.message || `HTTP ${dbRes.status}`;
+          throw { status: dbRes.status, code, message: msg };
+        }
+
+        const dsId = dbRes.data?.data_sources?.[0]?.id;
+        if (typeof dsId !== "string" || dsId.trim() === "") {
+          throw {
+            status: dbRes.status,
+            code: "missing_data_source",
+            message: "GET /v1/databases/{id} の応答に data_sources[0].id が含まれていません。",
+          };
+        }
+
+        const normalizedDsId = dsId.trim();
+        await window.DD.storage.set(cacheKey, normalizedDsId);
+        return { dataSourceId: normalizedDsId, usedCache: false };
+      }
+
+      async function fetchDataSourceMetadata(connectionId, dataSourceId) {
+        return await window.DD.connect.request({
+          connection: connectionId,
+          method: "GET",
+          path: `/v1/data_sources/${encodeURIComponent(dataSourceId)}`,
+        });
+      }
+
+      async function queryDataSourcePage(connectionId, dataSourceId, body) {
+        return await window.DD.connect.request({
+          connection: connectionId,
+          method: "POST",
+          path: `/v1/data_sources/${encodeURIComponent(dataSourceId)}/query`,
+          body,
+        });
+      }
+
+      async function loadTasks() {
+        if (isLoading) return;
+        isLoading = true;
+        refreshBtn.disabled = true;
+        updateTodayBadge();
+        hideError();
+
+        if (!hasBridge()) {
+          showSetupState(
+            "window.DD ブリッジが利用できません",
+            "この HTML は DesktopDashboards のローカル HTML ウィジェット (SourceType::File) として追加すると動作します。"
+          );
+          refreshBtn.disabled = false;
+          isLoading = false;
+          return;
+        }
+
+        try {
+          const cfg = await window.DD.config.get();
+          currentConfig = cfg && typeof cfg === "object" ? cfg : {};
+
+          const connId = typeof currentConfig.connection === "string"
+            ? currentConfig.connection.trim()
+            : "";
+          const dbId = extractDatabaseId(currentConfig.database_id);
+          currentConnectionId = connId;
+          currentDbId = dbId || "";
+
+          if (!connId) {
+            showSetupState(
+              "接続 ID が未設定です",
+              "管理画面のこのガジェットカード内「⚙ ウィジェット設定（DD.config）」で接続 ID（例: notion）を入力・保存してください。"
+            );
+            return;
+          }
+
+          if (!dbId) {
+            const rawDb = String(currentConfig.database_id || "").trim();
+            showSetupState(
+              rawDb ? "Notion データベース ID の形式を認識できません" : "Notion データベース ID が未設定です",
+              rawDb
+                ? "有効な 32 桁 ID、UUID、または Notion データベースの URL を「⚙ ウィジェット設定（DD.config）」へ保存してください。"
+                : "管理画面のこのガジェットカード内「⚙ ウィジェット設定（DD.config）」へ対象データベース ID（または URL）を保存してください。"
+            );
+            return;
+          }
+
+          showTasksLoading();
+
+          const preferredDateProp = typeof currentConfig.date_property === "string"
+            ? currentConfig.date_property.trim()
+            : "";
+          const preferredDoneProp = typeof currentConfig.done_property === "string"
+            ? currentConfig.done_property.trim()
+            : "";
+          const showOverdue = Boolean(currentConfig.show_overdue);
+
+          let { dataSourceId, usedCache } = await resolveDataSourceId(connId, dbId, false);
+          let hasReResolved = false;
+
+          let dsRes = await fetchDataSourceMetadata(connId, dataSourceId);
+          if (usedCache && (dsRes.status === 404 || dsRes.data?.code === "object_not_found")) {
+            hasReResolved = true;
+            ({ dataSourceId } = await resolveDataSourceId(connId, dbId, true));
+            usedCache = false;
+            dsRes = await fetchDataSourceMetadata(connId, dataSourceId);
+          }
+
+          let schema = {
+            titleProp: null,
+            dateProp: preferredDateProp || null,
+            doneProp: preferredDoneProp || null,
+          };
+
+          if (dsRes.ok) {
+            schema = detectSchemaFromPropertiesMap(
+              dsRes.data?.properties,
+              preferredDateProp,
+              preferredDoneProp
+            );
+          } else if (
+            dsRes.status === 401 ||
+            dsRes.status === 403 ||
+            dsRes.status === 404 ||
+            dsRes.data?.code === "object_not_found"
+          ) {
+            throw {
+              status: dsRes.status,
+              code: dsRes.data?.code || "",
+              message: dsRes.data?.message || `HTTP ${dsRes.status}`,
+            };
+          }
+
+          const now = new Date();
+          const todayYmd = formatLocalYmd(now);
+          const yesterdayYmd = addLocalDaysYmd(now, -1);
+          const tomorrowYmd = addLocalDaysYmd(now, 1);
+
+          let rawPages = [];
+          let cursor = null;
+          let pageCount = 0;
+
+          const buildQueryBody = (targetDateProp, nextCursor) => {
+            const body = { page_size: 100 };
+            if (nextCursor) {
+              body.start_cursor = nextCursor;
+            }
+            if (targetDateProp) {
+              if (showOverdue) {
+                body.filter = {
+                  property: targetDateProp,
+                  date: { on_or_before: tomorrowYmd },
+                };
+              } else {
+                body.filter = {
+                  and: [
+                    { property: targetDateProp, date: { on_or_after: yesterdayYmd } },
+                    { property: targetDateProp, date: { on_or_before: tomorrowYmd } },
+                  ],
+                };
+              }
+            }
+            return body;
+          };
+
+          do {
+            const reqBody = buildQueryBody(schema.dateProp, cursor);
+            let qRes = await queryDataSourcePage(connId, dataSourceId, reqBody);
+
+            if (
+              pageCount === 0 &&
+              usedCache &&
+              !hasReResolved &&
+              (qRes.status === 404 || qRes.data?.code === "object_not_found")
+            ) {
+              hasReResolved = true;
+              ({ dataSourceId } = await resolveDataSourceId(connId, dbId, true));
+              usedCache = false;
+              const refreshedDsRes = await fetchDataSourceMetadata(connId, dataSourceId);
+              if (refreshedDsRes.ok) {
+                schema = detectSchemaFromPropertiesMap(
+                  refreshedDsRes.data?.properties,
+                  preferredDateProp,
+                  preferredDoneProp
+                );
+              }
+              qRes = await queryDataSourcePage(
+                connId,
+                dataSourceId,
+                buildQueryBody(schema.dateProp, cursor)
+              );
+            }
+
+            if (!qRes.ok) {
+              throw {
+                status: qRes.status,
+                code: qRes.data?.code || "",
+                message: qRes.data?.message || `HTTP ${qRes.status}`,
+              };
+            }
+
+            const batch = Array.isArray(qRes.data?.results) ? qRes.data.results : [];
+            rawPages = rawPages.concat(batch);
+            pageCount += 1;
+
+            if (qRes.data?.has_more && typeof qRes.data?.next_cursor === "string" && qRes.data.next_cursor) {
+              if (qRes.data.next_cursor === cursor) break;
+              cursor = qRes.data.next_cursor;
+            } else {
+              cursor = null;
+            }
+          } while (cursor && pageCount < MAX_QUERY_PAGES);
+
+          if ((!schema.titleProp || !schema.dateProp || !schema.doneProp) && rawPages.length > 0) {
+            for (const p of rawPages) {
+              const inferred = detectSchemaFromPropertiesMap(
+                p?.properties,
+                preferredDateProp,
+                preferredDoneProp
+              );
+              if (!schema.titleProp && inferred.titleProp) schema.titleProp = inferred.titleProp;
+              if (!schema.dateProp && inferred.dateProp) schema.dateProp = inferred.dateProp;
+              if (!schema.doneProp && inferred.doneProp) schema.doneProp = inferred.doneProp;
+              if (schema.titleProp && schema.dateProp && schema.doneProp) break;
+            }
+          }
+
+          currentSchema = schema;
+          footerPropsEl.textContent =
+            `プロパティ: 日付=${schema.dateProp || "未検出"} / 完了=${schema.doneProp || "未検出"}`;
+          footerUpdatedEl.textContent = `最終更新: ${formatLocalTimeHms(new Date())}`;
+
+          if (!schema.dateProp) {
+            currentTasks = [];
+            renderTaskList();
+            showError(
+              "日付プロパティが見つかりません",
+              "データベースに date 型のプロパティが検出できませんでした。",
+              "Notion データベースに日付列を作成するか、ガジェット設定の「日付プロパティ名」を指定してください。"
+            );
+            return;
+          }
+
+          const extracted = [];
+          for (const page of rawPages) {
+            const task = extractTaskFromPage(page, schema, todayYmd, showOverdue);
+            if (task) {
+              extracted.push(task);
+            }
+          }
+
+          currentTasks = extracted;
+          renderTaskList();
+        } catch (err) {
+          const status = typeof err?.status === "number" ? err.status : 0;
+          const code = typeof err?.code === "string" ? err.code : "";
+          const rawMsg = err?.message ? String(err.message) : formatErrorMessage(err);
+          const guidance = buildNotionErrorGuidance(status, code, rawMsg);
+
+          applyViewVisibility({ empty: true });
+          emptyTitleEl.textContent = "タスクを取得できませんでした";
+          emptySubEl.textContent = "上のエラー案内を確認し、設定後に右上の ↻ で再読み込みしてください。";
+          countPillEl.textContent = "エラー";
+          countPillEl.className = "count-pill";
+
+          showError(
+            guidance.title,
+            `${code ? `[${code}] ` : ""}${rawMsg}`,
+            guidance.hint
+          );
+        } finally {
+          refreshBtn.disabled = false;
+          isLoading = false;
+        }
+      }
+
+      refreshBtn.addEventListener("click", () => {
+        void loadTasks();
+      });
+
+      errorCloseBtn.addEventListener("click", () => {
+        hideError();
+      });
+
+      openConsoleBtn.addEventListener("click", async () => {
+        if (!hasBridge()) return;
+        try {
+          await window.DD.openUrl(NOTION_CONSOLE_URL);
+        } catch (err) {
+          showError("ブラウザ起動エラー", formatErrorMessage(err));
+        }
+      });
+
+      updateTodayBadge();
+      void loadTasks();
+    })();
+  </script>
+</body>
+</html>

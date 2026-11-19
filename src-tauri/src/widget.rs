@@ -28,6 +28,8 @@ fn build_widget_init_script(
     let dd_bridge_script = if inject_dd_bridge {
         r#"
   if (window === window.top && location.origin === 'http://widgetfile.localhost' && !window.DD) {
+    let inFlightMutations = 0;
+    __ddHasActiveMutations = () => inFlightMutations > 0;
     const invokeBridge = (cmd, payload) => {
       if (!window.__TAURI_INTERNALS__ || typeof window.__TAURI_INTERNALS__.invoke !== 'function') {
         return Promise.reject(new Error('Tauri internals unavailable'));
@@ -46,20 +48,40 @@ fn build_widget_init_script(
       },
     });
     const connect = Object.freeze({
-      request(opts) {
+      async request(opts) {
         const { connection, method, path, body } = opts || {};
-        return invokeBridge('dd_connect_request', {
-          request: {
-            connection: String(connection || ''),
-            method: String(method || 'GET'),
-            path: String(path || ''),
-            body: body === undefined ? null : body,
-          },
-        });
+        const normMethod = String(method || 'GET').trim().toUpperCase();
+        const isMutation = normMethod !== 'GET' && normMethod !== 'HEAD';
+        if (isMutation) {
+          inFlightMutations += 1;
+        }
+        try {
+          return await invokeBridge('dd_connect_request', {
+            request: {
+              connection: String(connection || ''),
+              method: normMethod,
+              path: String(path || ''),
+              body: body === undefined ? null : body,
+            },
+          });
+        } finally {
+          if (isMutation) {
+            inFlightMutations = Math.max(0, inFlightMutations - 1);
+            markInteraction();
+          }
+        }
       },
     });
+    const config = Object.freeze({
+      get() {
+        return invokeBridge('dd_config_get', {});
+      },
+    });
+    const openUrl = (url) => {
+      return invokeBridge('dd_open_url', { url: String(url || '') });
+    };
     Object.defineProperty(window, 'DD', {
-      value: Object.freeze({ storage, connect }),
+      value: Object.freeze({ storage, connect, config, openUrl }),
       writable: false,
       configurable: false,
       enumerable: true,
@@ -76,7 +98,7 @@ fn build_widget_init_script(
   if (window !== window.top) return;
   if (window.__ddRuntimeInstalled) return;
   window.__ddRuntimeInstalled = true;
-{dd_bridge_script}
+
   const HOME_URL = {home_json};
   let isLocked = {locked_str};
   let currentCustomCss = {css_json};
@@ -84,14 +106,18 @@ fn build_widget_init_script(
   let pendingReloadTimer = null;
   let hostEl = null;
   let styleEl = null;
+  let __ddHasActiveMutations = null;
 
   const markInteraction = () => {{ lastInteractionAt = Date.now(); }};
   document.addEventListener('pointerdown', markInteraction, true);
   document.addEventListener('keydown', markInteraction, true);
   document.addEventListener('input', markInteraction, true);
   document.addEventListener('focusin', markInteraction, true);
-
+{dd_bridge_script}
   function isUserEditingOrActive() {{
+    if (typeof __ddHasActiveMutations === 'function' && __ddHasActiveMutations()) {{
+      return true;
+    }}
     const active = document.activeElement;
     if (active) {{
       const tag = active.tagName;
@@ -739,9 +765,13 @@ mod tests {
             "window === window.top && location.origin === 'http://widgetfile.localhost' && !window.DD"
         ));
         assert!(file_script.contains("Object.defineProperty(window, 'DD'"));
+        assert!(file_script.contains("Object.freeze({ storage, connect, config, openUrl })"));
         assert!(file_script.contains("dd_storage_get"));
         assert!(file_script.contains("dd_storage_set"));
         assert!(file_script.contains("dd_connect_request"));
+        assert!(file_script.contains("dd_config_get"));
+        assert!(file_script.contains("dd_open_url"));
+        assert!(file_script.contains("inFlightMutations"));
 
         let url_script = build_widget_init_script(false, "https://example.com/", "", false);
         assert!(url_script.contains("if (window !== window.top) return;"));
@@ -749,5 +779,8 @@ mod tests {
         assert!(!url_script.contains("dd_storage_get"));
         assert!(!url_script.contains("dd_storage_set"));
         assert!(!url_script.contains("dd_connect_request"));
+        assert!(!url_script.contains("dd_config_get"));
+        assert!(!url_script.contains("dd_open_url"));
+        assert!(!url_script.contains("inFlightMutations"));
     }
 }

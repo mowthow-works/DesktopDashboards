@@ -12,6 +12,9 @@
     * {
       box-sizing: border-box;
     }
+    [hidden] {
+      display: none !important;
+    }
     body {
       margin: 0;
       padding: 20px;
@@ -434,6 +437,35 @@
       padding: 1px 4px;
       color: #7dd3fc;
     }
+    .widget-config-details {
+      margin-top: 2px;
+    }
+    .widget-config-form {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .widget-config-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .widget-config-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .widget-config-status {
+      font-size: 11px;
+      color: #34d399;
+      min-height: 16px;
+    }
+    .widget-config-status.error {
+      color: #f87171;
+    }
   </style>
 </head>
 <body>
@@ -480,19 +512,20 @@
     </div>
 
     <details class="guide-details">
-      <summary>📖 Notion 連携の設定手順（3ステップ）</summary>
+      <summary>📖 Notion 連携の設定手順（4ステップ）</summary>
       <ol class="guide-steps">
-        <li>Notion の開発者画面（Internal Integrations）でインテグレーションを作成</li>
-        <li>発行されたシークレット（<code>ntn_...</code>）を下のフォームに入力して保存（Windows 資格情報マネージャーに暗号化保管されます）</li>
-        <li>Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト (Connections)</code> からインテグレーションを追加（※未共有だと <code>object_not_found</code> エラーになります）</li>
+        <li><code>https://app.notion.com/developers/connections</code> で <strong>+ New connection</strong> → <strong>名前を入力</strong>（空欄だと Create ボタン無効）→ Authentication method で <strong>API token</strong>（旧 Internal Integration 相当）を選んで <strong>Create connection</strong></li>
+        <li>Capabilities で <strong>Read content</strong> に加え、チェック書き戻しを行う場合は <strong>Update content</strong> を確認し、発行されたトークン（<code>ntn_...</code>）を下の「＋ 接続を追加」から保存（送信先 <code>api.notion.com</code>、Windows 資格情報マネージャー保管）</li>
+        <li>Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト (Connections)</code> からコネクトを追加、または開発者コンソールの <code>Content access</code> タブから親ページを選択して共有（※未共有だと <code>object_not_found</code> エラー）</li>
+        <li>対象 DB に <strong>タイトル (<code>title</code>)</strong>・<strong>日付 (<code>date</code>)</strong>・<strong>完了チェック (<code>checkbox</code>)</strong> の 3 プロパティを用意し、ガジェットの「⚙ ウィジェット設定」へ DB ID（または DB URL）を入力して保存</li>
       </ol>
       <div class="guide-actions">
         <a
-          href="https://www.notion.so/profile/integrations"
+          href="https://app.notion.com/developers/connections"
           class="guide-link"
           id="btn-open-notion-integrations"
           rel="noopener noreferrer"
-        >Notion インテグレーション設定を開く ↗</a>
+        >Notion 開発者コンソール (Connections) を開く ↗</a>
       </div>
     </details>
 
@@ -646,8 +679,147 @@
       }
     });
 
+    function buildWidgetConfigSection(w, configForm) {
+      if (!configForm || !configForm.has_manifest || !Array.isArray(configForm.schema) || configForm.schema.length === 0) {
+        return null;
+      }
+
+      const details = document.createElement("details");
+      details.className = "css-details widget-config-details";
+
+      const summary = document.createElement("summary");
+      const valuesMap = configForm.values && typeof configForm.values === "object" ? configForm.values : {};
+
+      const hasMissingRequired = () => configForm.schema.some((field) => {
+        if (!field.required || field.type !== "string") return false;
+        const val = valuesMap[field.key] !== undefined ? valuesMap[field.key] : field.default;
+        return String(val ?? "").trim() === "";
+      });
+
+      const updateSummaryText = (missing) => {
+        summary.textContent = missing
+          ? "⚙ ウィジェット設定（DD.config・未設定項目あり）"
+          : "⚙ ウィジェット設定（DD.config）";
+      };
+
+      const initialMissing = hasMissingRequired();
+      updateSummaryText(initialMissing);
+      if (initialMissing) {
+        details.open = true;
+      }
+
+      const formWrap = document.createElement("div");
+      formWrap.className = "widget-config-form";
+
+      const controlEntries = [];
+      for (const field of configForm.schema) {
+        const fieldWrap = document.createElement("div");
+        fieldWrap.className = "widget-config-field";
+
+        const rawValue = valuesMap[field.key] !== undefined ? valuesMap[field.key] : field.default;
+
+        if (field.type === "boolean") {
+          const chkLabel = document.createElement("label");
+          chkLabel.className = "switch";
+          const chk = document.createElement("input");
+          chk.type = "checkbox";
+          chk.checked = Boolean(rawValue);
+          chkLabel.appendChild(chk);
+          chkLabel.appendChild(document.createTextNode(field.label || field.key));
+          fieldWrap.appendChild(chkLabel);
+          controlEntries.push({ field, control: chk, kind: "boolean" });
+        } else {
+          const lbl = document.createElement("label");
+          lbl.className = "field-label";
+          lbl.textContent = `${field.label || field.key}${field.required ? " [必須]" : ""}`;
+          const inp = document.createElement("input");
+          inp.type = "text";
+          inp.value = rawValue !== null && rawValue !== undefined ? String(rawValue) : "";
+          inp.placeholder = field.placeholder || "";
+          inp.autocomplete = "off";
+          inp.spellcheck = false;
+          fieldWrap.appendChild(lbl);
+          fieldWrap.appendChild(inp);
+          controlEntries.push({ field, control: inp, kind: "string" });
+        }
+
+        if (field.description) {
+          const desc = document.createElement("div");
+          desc.className = "field-note";
+          desc.textContent = field.description;
+          fieldWrap.appendChild(desc);
+        }
+
+        formWrap.appendChild(fieldWrap);
+      }
+
+      const actionsRow = document.createElement("div");
+      actionsRow.className = "widget-config-actions";
+
+      const inlineStatus = document.createElement("span");
+      inlineStatus.className = "widget-config-status";
+
+      const btnSaveConfig = document.createElement("button");
+      btnSaveConfig.type = "button";
+      btnSaveConfig.className = "primary";
+      btnSaveConfig.textContent = "設定を保存して反映";
+      btnSaveConfig.addEventListener("click", async () => {
+        const nextValues = {};
+        for (const entry of controlEntries) {
+          if (entry.kind === "boolean") {
+            nextValues[entry.field.key] = Boolean(entry.control.checked);
+          } else {
+            nextValues[entry.field.key] = entry.control.value.trim();
+          }
+        }
+        btnSaveConfig.disabled = true;
+        inlineStatus.className = "widget-config-status";
+        inlineStatus.textContent = "保存中...";
+        try {
+          const updated = await invoke("save_widget_config", { id: w.id, values: nextValues });
+          const updatedValues = updated?.values && typeof updated.values === "object" ? updated.values : nextValues;
+          for (const entry of controlEntries) {
+            const v = updatedValues[entry.field.key];
+            if (v !== undefined && v !== null) {
+              if (entry.kind === "boolean") {
+                entry.control.checked = Boolean(v);
+              } else {
+                entry.control.value = String(v);
+              }
+            }
+            valuesMap[entry.field.key] = v;
+          }
+          updateSummaryText(hasMissingRequired());
+          inlineStatus.className = "widget-config-status";
+          inlineStatus.textContent = "保存し、ガジェットへ反映しました。";
+          setStatus(`「${w.title}」のウィジェット設定を保存して反映しました。`);
+        } catch (err) {
+          inlineStatus.className = "widget-config-status error";
+          inlineStatus.textContent = `保存エラー: ${err}`;
+          setStatus(`ウィジェット設定保存エラー: ${err}`, true);
+        } finally {
+          btnSaveConfig.disabled = false;
+        }
+      });
+
+      actionsRow.appendChild(inlineStatus);
+      actionsRow.appendChild(btnSaveConfig);
+      formWrap.appendChild(actionsRow);
+
+      details.appendChild(summary);
+      details.appendChild(formWrap);
+      return details;
+    }
+
     async function refreshWidgets() {
       const widgets = await invoke("list_widgets");
+      const configForms = await Promise.all(
+        widgets.map((w) =>
+          w.source_type === "file"
+            ? invoke("get_widget_config_form", { id: w.id }).catch(() => null)
+            : Promise.resolve(null)
+        )
+      );
       widgetListEl.innerHTML = "";
       if (!widgets.length) {
         const empty = document.createElement("div");
@@ -657,7 +829,9 @@
         return;
       }
 
-      for (const w of widgets) {
+      for (let i = 0; i < widgets.length; i += 1) {
+        const w = widgets[i];
+        const configForm = configForms[i];
         const card = document.createElement("div");
         card.className = "widget-card";
 
@@ -943,10 +1117,15 @@
         cssDetails.appendChild(cssSummary);
         cssDetails.appendChild(cssWrap);
 
+        const widgetConfigSection = buildWidgetConfigSection(w, configForm);
+
         card.appendChild(top);
         card.appendChild(srcDiv);
         card.appendChild(bottom);
         card.appendChild(settingsGrid);
+        if (widgetConfigSection) {
+          card.appendChild(widgetConfigSection);
+        }
         card.appendChild(cssDetails);
         widgetListEl.appendChild(card);
       }
@@ -1001,7 +1180,7 @@
     openNotionGuideLink.addEventListener("click", async (e) => {
       e.preventDefault();
       try {
-        await openExternalUrl("https://www.notion.so/profile/integrations");
+        await openExternalUrl("https://app.notion.com/developers/connections");
       } catch (err) {
         setConnStatus(`外部ブラウザ起動エラー: ${err}`, true);
       }

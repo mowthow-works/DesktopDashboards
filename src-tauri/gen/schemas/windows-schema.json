@@ -351,10 +351,22 @@
           "markdownDescription": "Enables the add_widget command without any pre-configured scope."
         },
         {
+          "description": "Enables the dd_config_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dd-config-get",
+          "markdownDescription": "Enables the dd_config_get command without any pre-configured scope."
+        },
+        {
           "description": "Enables the dd_connect_request command without any pre-configured scope.",
           "type": "string",
           "const": "allow-dd-connect-request",
           "markdownDescription": "Enables the dd_connect_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the dd_open_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dd-open-url",
+          "markdownDescription": "Enables the dd_open_url command without any pre-configured scope."
         },
         {
           "description": "Enables the dd_storage_get command without any pre-configured scope.",
@@ -399,6 +411,12 @@
           "markdownDescription": "Enables the get_webview_data_dir command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_widget_config_form command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-widget-config-form",
+          "markdownDescription": "Enables the get_widget_config_form command without any pre-configured scope."
+        },
+        {
           "description": "Enables the list_connections command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-connections",
@@ -439,6 +457,12 @@
           "type": "string",
           "const": "allow-save-connection",
           "markdownDescription": "Enables the save_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_widget_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-widget-config",
+          "markdownDescription": "Enables the save_widget_config command without any pre-configured scope."
         },
         {
           "description": "Enables the set_autostart command without any pre-configured scope.",
@@ -483,10 +507,22 @@
           "markdownDescription": "Denies the add_widget command without any pre-configured scope."
         },
         {
+          "description": "Denies the dd_config_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dd-config-get",
+          "markdownDescription": "Denies the dd_config_get command without any pre-configured scope."
+        },
+        {
           "description": "Denies the dd_connect_request command without any pre-configured scope.",
           "type": "string",
           "const": "deny-dd-connect-request",
           "markdownDescription": "Denies the dd_connect_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dd_open_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dd-open-url",
+          "markdownDescription": "Denies the dd_open_url command without any pre-configured scope."
         },
         {
           "description": "Denies the dd_storage_get command without any pre-configured scope.",
@@ -531,6 +567,12 @@
           "markdownDescription": "Denies the get_webview_data_dir command without any pre-configured scope."
         },
         {
+          "description": "Denies the get_widget_config_form command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-widget-config-form",
+          "markdownDescription": "Denies the get_widget_config_form command without any pre-configured scope."
+        },
+        {
           "description": "Denies the list_connections command without any pre-configured scope.",
           "type": "string",
           "const": "deny-list-connections",
@@ -571,6 +613,12 @@
           "type": "string",
           "const": "deny-save-connection",
           "markdownDescription": "Denies the save_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_widget_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-widget-config",
+          "markdownDescription": "Denies the save_widget_config command without any pre-configured scope."
         },
         {
           "description": "Denies the set_autostart command without any pre-configured scope.",

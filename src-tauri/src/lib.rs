@@ -775,6 +775,10 @@ pub fn run() {
             dd_bridge::save_connection,
             dd_bridge::delete_connection,
             dd_bridge::test_connection,
+            dd_bridge::dd_config_get,
+            dd_bridge::dd_open_url,
+            dd_bridge::get_widget_config_form,
+            dd_bridge::save_widget_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building DesktopDashboards");

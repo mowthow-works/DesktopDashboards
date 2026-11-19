@@ -1,0 +1,70 @@
+{
+  "id": "notion-today",
+  "name": "Notion 今日のタスク",
+  "version": "0.2.0",
+  "entry": "notion-today.html",
+  "connections": [
+    {
+      "connection": "*",
+      "connector": "notion",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/databases/*" },
+        { "method": "GET", "path": "/v1/data_sources/*" },
+        { "method": "POST", "path": "/v1/data_sources/*/query" },
+        { "method": "PATCH", "path": "/v1/pages/*" }
+      ]
+    }
+  ],
+  "config_schema": [
+    {
+      "key": "connection",
+      "label": "接続 ID",
+      "type": "string",
+      "required": true,
+      "default": "notion",
+      "placeholder": "notion",
+      "description": "管理画面の『外部サービス接続』に登録した接続 ID"
+    },
+    {
+      "key": "database_id",
+      "label": "Notion データベース ID（または URL）",
+      "type": "string",
+      "required": true,
+      "default": "",
+      "placeholder": "32桁のID または https://www.notion.so/...",
+      "description": "対象データベースの ID または URL をそのまま貼り付けできます"
+    },
+    {
+      "key": "date_property",
+      "label": "日付プロパティ名（省略可）",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "placeholder": "自動検出（date型プロパティ）",
+      "description": "省略時はデータベース内の date 型プロパティを自動選択"
+    },
+    {
+      "key": "done_property",
+      "label": "完了プロパティ名（省略可）",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "placeholder": "自動検出（checkbox型プロパティ）",
+      "description": "省略時はデータベース内の checkbox 型プロパティを自動選択"
+    },
+    {
+      "key": "show_done",
+      "label": "完了済みタスクも下部に表示する",
+      "type": "boolean",
+      "required": false,
+      "default": true
+    },
+    {
+      "key": "show_overdue",
+      "label": "期限切れの未完了タスクも表示する",
+      "type": "boolean",
+      "required": false,
+      "default": false
+    }
+  ]
+}

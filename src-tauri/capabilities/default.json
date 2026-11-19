@@ -24,6 +24,8 @@
     "allow-list-connections",
     "allow-save-connection",
     "allow-delete-connection",
-    "allow-test-connection"
+    "allow-test-connection",
+    "allow-get-widget-config-form",
+    "allow-save-widget-config"
   ]
 }

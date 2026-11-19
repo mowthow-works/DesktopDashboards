@@ -49,6 +49,10 @@ fn main() {
                 "save_connection",
                 "delete_connection",
                 "test_connection",
+                "dd_config_get",
+                "dd_open_url",
+                "get_widget_config_form",
+                "save_widget_config",
             ]),
         )
         .windows_attributes(tauri_build::WindowsAttributes::new().app_manifest(WINDOWS_APP_MANIFEST));

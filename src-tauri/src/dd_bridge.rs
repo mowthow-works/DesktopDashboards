@@ -16,11 +16,16 @@ const FORBIDDEN_URL_WIDGET_ERR: &str =
 const BUILTIN_NOTION_CONNECTOR_JSON: &str = include_str!("../../connectors/notion.json");
 
 static STORAGE_IO_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static WIDGET_CONFIG_IO_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static CONNECTIONS_IO_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 fn storage_lock() -> &'static Mutex<()> {
     STORAGE_IO_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn widget_config_lock() -> &'static Mutex<()> {
+    WIDGET_CONFIG_IO_LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn connections_lock() -> &'static Mutex<()> {
@@ -121,6 +126,32 @@ pub struct WidgetConnectionGrant {
     pub endpoints: Vec<EndpointRule>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigFieldSchema {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub default: Option<Value>,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WidgetConfigFormDto {
+    pub widget_id: String,
+    pub has_manifest: bool,
+    pub manifest_id: Option<String>,
+    pub manifest_name: Option<String>,
+    pub schema: Vec<ConfigFieldSchema>,
+    pub values: Map<String, Value>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WidgetManifest {
     pub id: String,
@@ -130,9 +161,13 @@ pub struct WidgetManifest {
     #[serde(default)]
     pub entry: Option<String>,
     #[serde(default)]
+    pub connector: Option<String>,
+    #[serde(default)]
     pub connections: Vec<WidgetConnectionGrant>,
     #[serde(default)]
     pub endpoints: Vec<EndpointRule>,
+    #[serde(default)]
+    pub config_schema: Vec<ConfigFieldSchema>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -534,6 +569,10 @@ fn app_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn widget_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_config_dir(app)?.join("storage"))
+}
+
+fn widget_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_config_dir(app)?.join("widget_config"))
 }
 
 fn connections_file_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -998,6 +1037,11 @@ fn validate_widget_manifest(manifest: &WidgetManifest) -> Result<(), String> {
     if manifest.name.trim().is_empty() {
         return Err("invalid widget manifest: 'name' must not be empty".to_string());
     }
+    if let Some(connector) = manifest.connector.as_deref() {
+        if !is_safe_identifier(connector) {
+            return Err("invalid widget manifest: invalid 'connector'".to_string());
+        }
+    }
     for grant in &manifest.connections {
         if grant.connection.trim().is_empty() {
             return Err("invalid widget manifest: connection name must not be empty".to_string());
@@ -1023,6 +1067,53 @@ fn validate_widget_manifest(manifest: &WidgetManifest) -> Result<(), String> {
         verify_endpoint_pattern_safety(&rule.path)
             .map_err(|e| format!("invalid widget manifest: {e}"))?;
     }
+
+    let mut seen_config_keys = HashSet::new();
+    for field in &manifest.config_schema {
+        if !is_safe_identifier(&field.key) {
+            return Err(format!(
+                "invalid widget manifest: invalid config_schema key '{}'",
+                field.key
+            ));
+        }
+        if !seen_config_keys.insert(field.key.clone()) {
+            return Err(format!(
+                "invalid widget manifest: duplicate config_schema key '{}'",
+                field.key
+            ));
+        }
+        if field.label.trim().is_empty() {
+            return Err(format!(
+                "invalid widget manifest: config_schema '{}' label must not be empty",
+                field.key
+            ));
+        }
+        match field.field_type.as_str() {
+            "string" | "boolean" => {}
+            other => {
+                return Err(format!(
+                    "invalid widget manifest: unsupported config_schema type '{other}' for '{}' (only 'string' or 'boolean' allowed)",
+                    field.key
+                ));
+            }
+        }
+        if let Some(default_val) = &field.default {
+            if !default_val.is_null() {
+                let type_ok = match field.field_type.as_str() {
+                    "string" => default_val.is_string(),
+                    "boolean" => default_val.is_boolean(),
+                    _ => false,
+                };
+                if !type_ok {
+                    return Err(format!(
+                        "invalid widget manifest: config_schema '{}' default value does not match type '{}'",
+                        field.key, field.field_type
+                    ));
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -1109,6 +1200,14 @@ pub fn verify_endpoint_intersection(
 
     let widget_rules: Vec<&EndpointRule> = if matching_grants.is_empty() {
         if widget_manifest.connections.is_empty() && !widget_manifest.endpoints.is_empty() {
+            if let Some(expected_connector) = widget_manifest.connector.as_deref() {
+                if expected_connector != connector.id {
+                    return Err(format!(
+                        "connector mismatch for connection '{connection}': expected '{expected_connector}', got '{}'",
+                        connector.id
+                    ));
+                }
+            }
             widget_manifest.endpoints.iter().collect()
         } else {
             return Err(format!(
@@ -1117,7 +1216,11 @@ pub fn verify_endpoint_intersection(
         }
     } else {
         for grant in &matching_grants {
-            if let Some(expected_connector) = grant.connector.as_deref() {
+            let expected_opt = grant
+                .connector
+                .as_deref()
+                .or(widget_manifest.connector.as_deref());
+            if let Some(expected_connector) = expected_opt {
                 if expected_connector != connector.id {
                     return Err(format!(
                         "connector mismatch for connection '{connection}': expected '{expected_connector}', got '{}'",
@@ -2090,6 +2193,257 @@ pub async fn test_connection(
     ))
 }
 
+fn default_value_for_schema_field(field: &ConfigFieldSchema) -> Value {
+    if let Some(default_val) = &field.default {
+        if !default_val.is_null() {
+            return default_val.clone();
+        }
+    }
+    match field.field_type.as_str() {
+        "boolean" => Value::Bool(false),
+        _ => Value::String(String::new()),
+    }
+}
+
+fn value_matches_schema_type(val: &Value, field_type: &str) -> bool {
+    match field_type {
+        "string" => val.is_string(),
+        "boolean" => val.is_boolean(),
+        _ => false,
+    }
+}
+
+fn build_effective_config_map(
+    manifest: &WidgetManifest,
+    saved_map: &Map<String, Value>,
+) -> Map<String, Value> {
+    let mut effective = Map::new();
+    for field in &manifest.config_schema {
+        let val = match saved_map.get(&field.key) {
+            Some(saved) if value_matches_schema_type(saved, &field.field_type) => saved.clone(),
+            _ => default_value_for_schema_field(field),
+        };
+        effective.insert(field.key.clone(), val);
+    }
+    effective
+}
+
+/// ウィジェット固有の `widget_config/{widget_id}.json` と `config_schema` デフォルト値を統合した設定オブジェクトを返す。
+pub fn read_effective_widget_config(
+    config_dir: &Path,
+    html_path: &Path,
+    widget_id: &str,
+) -> Result<Value, String> {
+    validate_widget_id(widget_id)?;
+    let Some(manifest) = load_widget_manifest_for_html(html_path)? else {
+        return Ok(Value::Object(Map::new()));
+    };
+
+    let path = config_dir.join(format!("{widget_id}.json"));
+    let _guard = widget_config_lock()
+        .lock()
+        .map_err(|e| format!("widget config lock poisoned: {e}"))?;
+    let saved_map = read_storage_map(&path)?;
+    Ok(Value::Object(build_effective_config_map(
+        &manifest,
+        &saved_map,
+    )))
+}
+
+/// 管理画面フォーム用に `WidgetConfigFormDto` を構築する。
+pub fn read_widget_config_form_for_widget(
+    config_dir: &Path,
+    widget: &WidgetConfig,
+    html_path: &Path,
+) -> Result<WidgetConfigFormDto, String> {
+    if widget.source_type != SourceType::File {
+        return Ok(WidgetConfigFormDto {
+            widget_id: widget.id.clone(),
+            has_manifest: false,
+            manifest_id: None,
+            manifest_name: None,
+            schema: Vec::new(),
+            values: Map::new(),
+        });
+    }
+
+    let Some(manifest) = load_widget_manifest_for_html(html_path)? else {
+        return Ok(WidgetConfigFormDto {
+            widget_id: widget.id.clone(),
+            has_manifest: false,
+            manifest_id: None,
+            manifest_name: None,
+            schema: Vec::new(),
+            values: Map::new(),
+        });
+    };
+
+    validate_widget_id(&widget.id)?;
+    let path = config_dir.join(format!("{}.json", widget.id));
+    let _guard = widget_config_lock()
+        .lock()
+        .map_err(|e| format!("widget config lock poisoned: {e}"))?;
+    let saved_map = read_storage_map(&path)?;
+    let effective = build_effective_config_map(&manifest, &saved_map);
+
+    Ok(WidgetConfigFormDto {
+        widget_id: widget.id.clone(),
+        has_manifest: true,
+        manifest_id: Some(manifest.id),
+        manifest_name: Some(manifest.name),
+        schema: manifest.config_schema,
+        values: effective,
+    })
+}
+
+/// `config_schema` 定義キーのみを型検証した上で `widget_config/{widget_id}.json` へ原子的に保存する。
+pub fn save_widget_config_values(
+    config_dir: &Path,
+    html_path: &Path,
+    widget_id: &str,
+    raw_values: &Map<String, Value>,
+) -> Result<WidgetConfigFormDto, String> {
+    validate_widget_id(widget_id)?;
+    let manifest = load_widget_manifest_for_html(html_path)?.ok_or_else(|| {
+        "widget manifest not found: widget config is not available".to_string()
+    })?;
+
+    let path = config_dir.join(format!("{widget_id}.json"));
+    let _guard = widget_config_lock()
+        .lock()
+        .map_err(|e| format!("widget config lock poisoned: {e}"))?;
+    let existing_map = read_storage_map(&path)?;
+
+    let mut next_map = Map::new();
+    for field in &manifest.config_schema {
+        let next_val = if let Some(val) = raw_values.get(&field.key) {
+            if !value_matches_schema_type(val, &field.field_type) {
+                return Err(format!(
+                    "config field '{}' must be of type '{}'",
+                    field.key, field.field_type
+                ));
+            }
+            val.clone()
+        } else if let Some(prev) = existing_map.get(&field.key) {
+            if value_matches_schema_type(prev, &field.field_type) {
+                prev.clone()
+            } else {
+                default_value_for_schema_field(field)
+            }
+        } else {
+            default_value_for_schema_field(field)
+        };
+        next_map.insert(field.key.clone(), next_val);
+    }
+
+    let mut json = serde_json::to_string_pretty(&next_map)
+        .map_err(|e| format!("failed to serialize widget config: {e}"))?;
+    json.push('\n');
+    write_text_atomic(&path, &json)?;
+
+    Ok(WidgetConfigFormDto {
+        widget_id: widget_id.to_string(),
+        has_manifest: true,
+        manifest_id: Some(manifest.id),
+        manifest_name: Some(manifest.name),
+        schema: manifest.config_schema,
+        values: next_map,
+    })
+}
+
+/// `DD.openUrl` で起動可能な URL が `http://` または `https://`（ホスト名あり）であることを検証する。
+pub fn validate_open_url_target(raw_url: &str) -> Result<url::Url, String> {
+    let trimmed = raw_url.trim();
+    if trimmed.is_empty() || trimmed.chars().any(|c| c.is_control()) {
+        return Err("invalid URL: empty or contains control characters".to_string());
+    }
+    let parsed = url::Url::parse(trimmed).map_err(|e| format!("invalid URL: {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(format!(
+            "unsupported URL scheme '{}' (only http and https are allowed)",
+            parsed.scheme()
+        ));
+    }
+    if parsed.host_str().is_none() {
+        return Err("invalid URL: missing host".to_string());
+    }
+    Ok(parsed)
+}
+
+fn find_widget_by_id(app: &AppHandle, widget_id: &str) -> Result<WidgetConfig, String> {
+    let state = app
+        .try_state::<Arc<ConfigState>>()
+        .ok_or_else(|| "ConfigState not initialized".to_string())?;
+    let cfg = state
+        .config
+        .lock()
+        .map_err(|e| format!("config lock poisoned: {e}"))?;
+    cfg.widgets
+        .iter()
+        .find(|w| w.id == widget_id)
+        .cloned()
+        .ok_or_else(|| format!("widget not found: {widget_id}"))
+}
+
+#[tauri::command]
+pub fn dd_config_get(
+    app: AppHandle,
+    window: WebviewWindow,
+    ipc_req: tauri::ipc::Request<'_>,
+) -> Result<Value, String> {
+    let widget = caller_file_widget(&app, &window, &ipc_req)?;
+    let html_path = resolve_widget_html_path(&app, &widget);
+    let cfg_dir = widget_config_dir(&app)?;
+    read_effective_widget_config(&cfg_dir, &html_path, &widget.id)
+}
+
+#[tauri::command]
+pub fn dd_open_url(
+    app: AppHandle,
+    window: WebviewWindow,
+    ipc_req: tauri::ipc::Request<'_>,
+    url: String,
+) -> Result<(), String> {
+    let _widget = caller_file_widget(&app, &window, &ipc_req)?;
+    let parsed = validate_open_url_target(&url)?;
+    tauri_plugin_opener::open_url(parsed.as_str(), None::<&str>)
+        .map_err(|e| format!("failed to open URL: {e}"))
+}
+
+#[tauri::command]
+pub fn get_widget_config_form(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<WidgetConfigFormDto, String> {
+    verify_manager_caller(window.label())?;
+    let widget = find_widget_by_id(&app, &id)?;
+    let html_path = resolve_widget_html_path(&app, &widget);
+    let cfg_dir = widget_config_dir(&app)?;
+    read_widget_config_form_for_widget(&cfg_dir, &widget, &html_path)
+}
+
+#[tauri::command]
+pub fn save_widget_config(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: String,
+    values: Map<String, Value>,
+) -> Result<WidgetConfigFormDto, String> {
+    verify_manager_caller(window.label())?;
+    let widget = find_widget_by_id(&app, &id)?;
+    if widget.source_type != SourceType::File {
+        return Err(
+            "widget config is only supported for local HTML widgets (SourceType::File)".to_string(),
+        );
+    }
+    let html_path = resolve_widget_html_path(&app, &widget);
+    let cfg_dir = widget_config_dir(&app)?;
+    let dto = save_widget_config_values(&cfg_dir, &html_path, &widget.id, &values)?;
+    crate::widget::reload_widget_window(&app, &id);
+    Ok(dto)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3048,5 +3402,289 @@ mod tests {
         );
         assert!(!err_403.ok);
         assert!(err_403.hint.as_deref().unwrap().contains("権限"));
+    }
+
+    #[test]
+    fn widget_config_schema_validation_enforces_types_uniqueness_and_no_secrets() {
+        // 正常: string と boolean のみ、デフォルト型一致
+        let valid = parse_and_validate_widget_manifest(
+            r#"{
+  "id": "notion-today",
+  "name": "Notion 今日のタスク",
+  "config_schema": [
+    { "key": "connection", "label": "接続 ID", "type": "string", "required": true, "default": "notion" },
+    { "key": "show_done", "label": "完了表示", "type": "boolean", "required": false, "default": true }
+  ]
+}"#,
+        );
+        assert!(valid.is_ok());
+
+        // 拒否: "secret" 型や未知型
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"api_token","label":"Token","type":"secret"}]}"#
+        ).is_err());
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"count","label":"Count","type":"number"}]}"#
+        ).is_err());
+
+        // 拒否: キー重複
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"db","label":"A","type":"string"},{"key":"db","label":"B","type":"string"}]}"#
+        ).is_err());
+
+        // 拒否: 不正キー・空ラベル・不正デフォルト型
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"../evil","label":"DB","type":"string"}]}"#
+        ).is_err());
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"db","label":"  ","type":"string"}]}"#
+        ).is_err());
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"show_done","label":"完了表示","type":"boolean","default":"true"}]}"#
+        ).is_err());
+        assert!(parse_and_validate_widget_manifest(
+            r#"{"id":"w","name":"W","config_schema":[{"key":"db","label":"DB","type":"string","default":false}]}"#
+        ).is_err());
+    }
+
+    #[test]
+    fn widget_config_read_save_defaults_empty_string_and_storage_isolation() {
+        let dir = std::env::temp_dir().join(format!("dd_wcfg_test_{}", uuid::Uuid::new_v4()));
+        let config_dir = dir.join("widget_config");
+        let storage_dir = dir.join("storage");
+        fs::create_dir_all(&dir).unwrap();
+
+        let html_no_manifest = dir.join("plain.html");
+        fs::write(&html_no_manifest, "<html></html>").unwrap();
+        assert_eq!(
+            read_effective_widget_config(&config_dir, &html_no_manifest, "w1").unwrap(),
+            json!({})
+        );
+
+        let html_path = dir.join("notion-today.html");
+        fs::write(&html_path, "<html></html>").unwrap();
+        fs::write(
+            dir.join("notion-today.manifest.json"),
+            r#"{
+  "id": "notion-today",
+  "name": "Notion 今日のタスク",
+  "entry": "notion-today.html",
+  "config_schema": [
+    { "key": "connection", "label": "接続 ID", "type": "string", "required": true, "default": "notion" },
+    { "key": "database_id", "label": "DB ID", "type": "string", "required": true, "default": "" },
+    { "key": "show_done", "label": "完了表示", "type": "boolean", "default": true },
+    { "key": "show_overdue", "label": "期限切れ表示", "type": "boolean" }
+  ]
+}"#,
+        )
+        .unwrap();
+
+        // 未保存時はデフォルト値補完（boolean で default 省略時は false）
+        let initial = read_effective_widget_config(&config_dir, &html_path, "w1").unwrap();
+        assert_eq!(
+            initial,
+            json!({
+                "connection": "notion",
+                "database_id": "",
+                "show_done": true,
+                "show_overdue": false
+            })
+        );
+
+        // required: true の string に空文字 "" の保存を許可し、未知キーは除外する
+        let mut raw = Map::new();
+        raw.insert("connection".to_string(), json!("notion_work"));
+        raw.insert("database_id".to_string(), json!(""));
+        raw.insert("show_done".to_string(), json!(false));
+        raw.insert("show_overdue".to_string(), json!(true));
+        raw.insert("unknown_extra".to_string(), json!("should_be_stripped"));
+
+        let saved_dto = save_widget_config_values(&config_dir, &html_path, "w1", &raw).unwrap();
+        assert!(saved_dto.has_manifest);
+        assert_eq!(saved_dto.manifest_id.as_deref(), Some("notion-today"));
+        assert!(!saved_dto.values.contains_key("unknown_extra"));
+        assert_eq!(saved_dto.values.get("database_id"), Some(&json!("")));
+
+        // 型不一致は拒否
+        let mut bad_type = Map::new();
+        bad_type.insert("show_done".to_string(), json!("yes"));
+        assert!(save_widget_config_values(&config_dir, &html_path, "w1", &bad_type).is_err());
+
+        // DD.storage (storage/w1.json) とは完全分離される
+        write_widget_storage_value(&storage_dir, "w1", "notion:data_source_id:db1", json!("ds-1"))
+            .unwrap();
+        assert!(config_dir.join("w1.json").is_file());
+        assert!(storage_dir.join("w1.json").is_file());
+        assert_eq!(
+            read_widget_storage_value(&storage_dir, "w1", "connection").unwrap(),
+            Value::Null
+        );
+        let reloaded = read_effective_widget_config(&config_dir, &html_path, "w1").unwrap();
+        assert_eq!(reloaded.get("connection"), Some(&json!("notion_work")));
+        assert_eq!(reloaded.get("show_done"), Some(&json!(false)));
+        assert_eq!(reloaded.get("show_overdue"), Some(&json!(true)));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn validate_open_url_target_allows_http_https_and_rejects_dangerous_schemes() {
+        assert_eq!(
+            validate_open_url_target("https://www.notion.so/page-123")
+                .unwrap()
+                .scheme(),
+            "https"
+        );
+        assert_eq!(
+            validate_open_url_target("http://example.com/path")
+                .unwrap()
+                .scheme(),
+            "http"
+        );
+
+        for bad in [
+            "",
+            "   ",
+            "javascript:alert(1)",
+            "file:///C:/Windows/win.ini",
+            "data:text/html,<script>alert(1)</script>",
+            "widgetfile://local/index.html",
+            "http://",
+            "https://example.com/\nnewline",
+        ] {
+            assert!(
+                validate_open_url_target(bad).is_err(),
+                "expected URL rejection for '{bad}'"
+            );
+        }
+    }
+
+    #[test]
+    fn phase4c_capabilities_isolate_dd_and_manager_commands() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let widgets_dd: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets-dd.json")).unwrap(),
+        )
+        .unwrap();
+        let default_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("default.json")).unwrap(),
+        )
+        .unwrap();
+        let widgets_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets.json")).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(widgets_dd.get("local"), Some(&json!(true)));
+        assert!(widgets_dd.get("remote").is_none());
+        let dd_perms = widgets_dd.get("permissions").and_then(Value::as_array).unwrap();
+        for p in ["allow-dd-config-get", "allow-dd-open-url"] {
+            assert!(
+                dd_perms.iter().any(|v| v.as_str() == Some(p)),
+                "widgets-dd.json missing {p}"
+            );
+        }
+
+        let def_perms = default_cap.get("permissions").and_then(Value::as_array).unwrap();
+        for p in ["allow-get-widget-config-form", "allow-save-widget-config"] {
+            assert!(
+                def_perms.iter().any(|v| v.as_str() == Some(p)),
+                "default.json missing {p}"
+            );
+        }
+
+        let w_perms = widgets_cap.get("permissions").and_then(Value::as_array).unwrap();
+        assert!(
+            !w_perms
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|p| p.starts_with("allow-dd-")),
+            "widgets.json must not contain allow-dd-*"
+        );
+    }
+
+    #[test]
+    fn notion_today_manifest_intersection_allows_read_and_page_patch_and_top_level_connector() {
+        let notion = parse_and_validate_connector(BUILTIN_NOTION_CONNECTOR_JSON).unwrap();
+        let today_manifest = parse_and_validate_widget_manifest(
+            r#"{
+  "id": "notion-today",
+  "name": "Notion 今日のタスク",
+  "version": "0.2.0",
+  "entry": "notion-today.html",
+  "connections": [
+    {
+      "connection": "*",
+      "connector": "notion",
+      "endpoints": [
+        { "method": "GET", "path": "/v1/databases/*" },
+        { "method": "GET", "path": "/v1/data_sources/*" },
+        { "method": "POST", "path": "/v1/data_sources/*/query" },
+        { "method": "PATCH", "path": "/v1/pages/*" }
+      ]
+    }
+  ]
+}"#,
+        )
+        .unwrap();
+
+        for (method, path) in [
+            ("GET", "/v1/databases/db-123"),
+            ("GET", "/v1/data_sources/ds-456"),
+            ("POST", "/v1/data_sources/ds-456/query"),
+            ("PATCH", "/v1/pages/page-789"),
+        ] {
+            assert!(
+                verify_endpoint_intersection(&notion, &today_manifest, "notion", method, path)
+                    .is_ok(),
+                "expected {method} {path} to pass"
+            );
+        }
+
+        // 未宣言の GET /v1/users/me や DELETE /v1/pages/page-789 は拒否
+        assert!(
+            verify_endpoint_intersection(&notion, &today_manifest, "notion", "GET", "/v1/users/me")
+                .is_err()
+        );
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &today_manifest,
+            "notion",
+            "DELETE",
+            "/v1/pages/page-789"
+        )
+        .is_err());
+
+        // トップレベル connector + endpoints 形式もサポートし、不一致コネクタは拒否
+        let top_level_manifest = parse_and_validate_widget_manifest(
+            r#"{
+  "id": "top-level",
+  "name": "Top Level",
+  "connector": "notion",
+  "endpoints": [
+    { "method": "GET", "path": "/v1/databases/*" }
+  ]
+}"#,
+        )
+        .unwrap();
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &top_level_manifest,
+            "my-notion",
+            "GET",
+            "/v1/databases/db-1"
+        )
+        .is_ok());
+
+        let mut other_conn = notion.clone();
+        other_conn.id = "other".to_string();
+        assert!(verify_endpoint_intersection(
+            &other_conn,
+            &top_level_manifest,
+            "my-other",
+            "GET",
+            "/v1/databases/db-1"
+        )
+        .is_err());
     }
 }

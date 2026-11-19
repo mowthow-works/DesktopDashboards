@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dd-config-get"
+description = "Enables the dd_config_get command without any pre-configured scope."
+commands.allow = ["dd_config_get"]
+
+[[permission]]
+identifier = "deny-dd-config-get"
+description = "Denies the dd_config_get command without any pre-configured scope."
+commands.deny = ["dd_config_get"]
