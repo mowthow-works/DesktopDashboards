@@ -53,6 +53,7 @@ fn main() {
                 "dd_open_url",
                 "get_widget_config_form",
                 "save_widget_config",
+                "duplicate_widget",
             ]),
         )
         .windows_attributes(tauri_build::WindowsAttributes::new().app_manifest(WINDOWS_APP_MANIFEST));

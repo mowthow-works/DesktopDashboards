@@ -179,6 +179,7 @@ pub async fn add_or_activate_url_widget(
                 enabled: true,
                 x,
                 y,
+                local_storage_isolated: true,
                 ..Default::default()
             };
             cfg.widgets.push(new_widget.clone());
@@ -322,6 +323,7 @@ pub fn default_sample_widget_for_dir(
         y,
         width: 400,
         height: 580,
+        local_storage_isolated: true,
         ..Default::default()
     })
 }
@@ -403,6 +405,7 @@ async fn add_widget(
             enabled: true,
             x,
             y,
+            local_storage_isolated: true,
             ..Default::default()
         };
         cfg.widgets.push(w.clone());
@@ -503,6 +506,202 @@ async fn update_widget_settings(
     Ok(())
 }
 
+/// 複製時の連番タイトル（例: `"付箋メモ＆ToDo"` → `"付箋メモ＆ToDo 2"`, `"付箋メモ＆ToDo 2"` → `"付箋メモ＆ToDo 3"`）を生成する。
+pub fn next_duplicated_title(source_title: &str, existing_widgets: &[WidgetConfig]) -> String {
+    let trimmed = source_title.trim();
+    let base = if trimmed.is_empty() {
+        "Widget"
+    } else if let Some((left, right)) = trimmed.rsplit_once(' ') {
+        let left_trimmed = left.trim_end();
+        let is_serial = !left_trimmed.is_empty()
+            && !right.is_empty()
+            && !right.starts_with('0')
+            && right.chars().all(|c| c.is_ascii_digit())
+            && right.parse::<u32>().is_ok_and(|n| (2..=999).contains(&n));
+        if is_serial {
+            left_trimmed
+        } else {
+            trimmed
+        }
+    } else {
+        trimmed
+    };
+
+    let used_titles: std::collections::HashSet<&str> = existing_widgets
+        .iter()
+        .map(|w| w.title.trim())
+        .collect();
+
+    let mut n: u32 = 2;
+    loop {
+        let candidate = format!("{base} {n}");
+        if !used_titles.contains(candidate.as_str()) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
+/// 複製元の位置から `(+32, +32)` ずつカスケードし、既存ウィンドウと左上座標が重なりにくい座標を返す。
+pub fn next_duplicated_position(
+    mon_x: i32,
+    mon_y: i32,
+    mon_w: i32,
+    mon_h: i32,
+    source: &WidgetConfig,
+    existing_widgets: &[WidgetConfig],
+) -> (i32, i32) {
+    let step = 32;
+    let margin = 24;
+    let w = source.width.max(120) as i32;
+    let h = source.height.max(80) as i32;
+    let min_x = mon_x + margin;
+    let min_y = mon_y + margin;
+    let max_x = (mon_x + mon_w - w - margin).max(min_x);
+    let max_y = (mon_y + mon_h - h - margin).max(min_y);
+    let span_x = (max_x - min_x + 1).max(1);
+    let span_y = (max_y - min_y + 1).max(1);
+
+    let mut cx = source.x;
+    let mut cy = source.y;
+    for _ in 0..24 {
+        cx += step;
+        cy += step;
+        if cx > max_x || cx < min_x {
+            cx = min_x + (cx - min_x).rem_euclid(span_x);
+        }
+        if cy > max_y || cy < min_y {
+            cy = min_y + (cy - min_y).rem_euclid(span_y);
+        }
+        let near_existing = existing_widgets.iter().any(|existing| {
+            existing.enabled && (existing.x - cx).abs() < 16 && (existing.y - cy).abs() < 16
+        });
+        if !near_existing {
+            return (cx, cy);
+        }
+    }
+
+    next_non_overlapping_position(mon_x, mon_y, mon_w, mon_h, w, h, existing_widgets)
+}
+
+/// 元ウィジェットの見た目設定を引き継ぎつつ、新しい ID・座標・連番タイトル・空の隔離ストレージ状態で複製設定を構築する。
+pub fn build_duplicated_widget_config(
+    source: &WidgetConfig,
+    x: i32,
+    y: i32,
+    title: String,
+) -> WidgetConfig {
+    WidgetConfig {
+        id: uuid::Uuid::new_v4().to_string(),
+        title,
+        source_type: SourceType::File,
+        source: source.source.clone(),
+        enabled: true,
+        x,
+        y,
+        width: source.width.max(120),
+        height: source.height.max(80),
+        dpi_scale: source.dpi_scale,
+        opacity: source.opacity,
+        zoom: source.zoom,
+        locked: false,
+        click_through: false,
+        no_activate: source.no_activate,
+        auto_reload_minutes: source.auto_reload_minutes,
+        hide_scrollbar: source.hide_scrollbar,
+        custom_css: source.custom_css.clone(),
+        placement_mode: source.placement_mode,
+        local_storage_isolated: true,
+    }
+}
+
+fn monitor_bounds_for_point(app: &AppHandle, x: i32, y: i32) -> (i32, i32, i32, i32) {
+    if let Ok(Some(m)) = app.monitor_from_point(f64::from(x), f64::from(y)) {
+        return (
+            m.position().x,
+            m.position().y,
+            m.size().width as i32,
+            m.size().height as i32,
+        );
+    }
+    app.primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            (
+                m.position().x,
+                m.position().y,
+                m.size().width as i32,
+                m.size().height as i32,
+            )
+        })
+        .unwrap_or((0, 0, 1920, 1080))
+}
+
+/// 複製可能 (`"duplicable": true`) なローカル HTML ガジェットの空の新規インスタンスを追加・表示する。
+pub async fn duplicate_widget_internal(
+    app: AppHandle,
+    source_id: String,
+) -> Result<WidgetConfig, String> {
+    let state = app
+        .try_state::<Arc<ConfigState>>()
+        .ok_or_else(|| "ConfigState not initialized".to_string())?;
+
+    let source_snapshot = {
+        let cfg = state
+            .config
+            .lock()
+            .map_err(|e| format!("config lock poisoned: {e}"))?;
+        cfg.widgets
+            .iter()
+            .find(|w| w.id == source_id)
+            .cloned()
+            .ok_or_else(|| format!("widget not found: {source_id}"))?
+    };
+
+    if source_snapshot.source_type != SourceType::File {
+        return Err("URL ウィジェットは増やせません（ローカル HTML のみ対応）".to_string());
+    }
+    if !dd_bridge::is_widget_duplicable(&app, &source_snapshot) {
+        return Err(
+            "このウィジェットの manifest に \"duplicable\": true が宣言されていないため増やせません"
+                .to_string(),
+        );
+    }
+
+    let (mx, my, mw, mh) =
+        monitor_bounds_for_point(&app, source_snapshot.x + 20, source_snapshot.y + 20);
+
+    let new_widget = {
+        let mut cfg = state
+            .config
+            .lock()
+            .map_err(|e| format!("config lock poisoned: {e}"))?;
+        let (x, y) =
+            next_duplicated_position(mx, my, mw, mh, &source_snapshot, &cfg.widgets);
+        let title = next_duplicated_title(&source_snapshot.title, &cfg.widgets);
+        let duplicated = build_duplicated_widget_config(&source_snapshot, x, y, title);
+        cfg.widgets.push(duplicated.clone());
+        duplicated
+    };
+
+    state.save_now()?;
+    widget::create_widget_window(app.clone(), new_widget.clone()).await?;
+    tray::refresh_tray_menu(&app);
+    let _ = app.emit("widgets-updated", ());
+    Ok(new_widget)
+}
+
+#[tauri::command]
+async fn duplicate_widget(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<WidgetConfig, String> {
+    dd_bridge::verify_manager_caller(window.label())?;
+    duplicate_widget_internal(app, id).await
+}
+
 #[tauri::command]
 async fn widget_bar_action(
     app: AppHandle,
@@ -556,6 +755,9 @@ async fn widget_bar_action(
         "close" => {
             toggle_widget_internal(app, widget_id, Some(false)).await?;
         }
+        "duplicate" => {
+            duplicate_widget_internal(app, widget_id).await?;
+        }
         _ => return Err(format!("unknown action: {action}")),
     }
 
@@ -600,8 +802,27 @@ async fn reset_widget_position(app: AppHandle, id: String) -> Result<(), String>
 }
 
 #[tauri::command]
-fn delete_widget(app: AppHandle, id: String) -> Result<(), String> {
-    widget::close_widget_window(&app, &id);
+async fn delete_widget(app: AppHandle, id: String) -> Result<(), String> {
+    let is_file_widget = {
+        let state = app
+            .try_state::<Arc<ConfigState>>()
+            .ok_or_else(|| "ConfigState not initialized".to_string())?;
+        let cfg = state
+            .config
+            .lock()
+            .map_err(|e| format!("config lock poisoned: {e}"))?;
+        cfg.widgets
+            .iter()
+            .find(|w| w.id == id)
+            .is_some_and(|w| w.source_type == SourceType::File)
+    };
+
+    if is_file_widget {
+        widget::clear_storage_and_close_widget_window(&app, &id).await;
+    } else {
+        widget::close_widget_window(&app, &id);
+    }
+
     let state = app
         .try_state::<Arc<ConfigState>>()
         .ok_or_else(|| "ConfigState not initialized".to_string())?;
@@ -779,6 +1000,7 @@ pub fn run() {
             dd_bridge::dd_open_url,
             dd_bridge::get_widget_config_form,
             dd_bridge::save_widget_config,
+            duplicate_widget,
         ])
         .build(tauri::generate_context!())
         .expect("error while building DesktopDashboards");
@@ -867,6 +1089,123 @@ mod tests {
         assert_eq!(w.source_type, SourceType::File);
         assert!(w.source.ends_with("sticky-todo.html"));
         assert!(w.enabled);
+        assert!(w.local_storage_isolated);
         assert_eq!((w.width, w.height), (400, 580));
+    }
+
+    #[test]
+    fn next_duplicated_title_strips_serial_and_avoids_collisions() {
+        let make = |title: &str| WidgetConfig {
+            title: title.to_string(),
+            ..Default::default()
+        };
+
+        let existing1 = vec![make("付箋メモ＆ToDo")];
+        assert_eq!(
+            next_duplicated_title("付箋メモ＆ToDo", &existing1),
+            "付箋メモ＆ToDo 2"
+        );
+
+        let existing2 = vec![make("付箋メモ＆ToDo"), make("付箋メモ＆ToDo 2")];
+        assert_eq!(
+            next_duplicated_title("付箋メモ＆ToDo 2", &existing2),
+            "付箋メモ＆ToDo 3"
+        );
+        assert_eq!(
+            next_duplicated_title("付箋メモ＆ToDo", &existing2),
+            "付箋メモ＆ToDo 3"
+        );
+
+        // 欠番 "2" が空いている場合は最小未使用番号 "2" を使う
+        let existing_gap = vec![make("付箋メモ＆ToDo"), make("付箋メモ＆ToDo 3")];
+        assert_eq!(
+            next_duplicated_title("付箋メモ＆ToDo 3", &existing_gap),
+            "付箋メモ＆ToDo 2"
+        );
+
+        // 4桁西暦等は連番として剥がさない
+        let existing_year = vec![make("Tasks 2026")];
+        assert_eq!(
+            next_duplicated_title("Tasks 2026", &existing_year),
+            "Tasks 2026 2"
+        );
+    }
+
+    #[test]
+    fn next_duplicated_position_cascades_and_wraps() {
+        let src = WidgetConfig {
+            id: "w1".to_string(),
+            x: 100,
+            y: 120,
+            width: 400,
+            height: 580,
+            enabled: true,
+            ..Default::default()
+        };
+        let (x2, y2) = next_duplicated_position(0, 0, 1920, 1080, &src, &[src.clone()]);
+        assert_eq!((x2, y2), (132, 152));
+
+        let mut second = src.clone();
+        second.id = "w2".to_string();
+        second.x = x2;
+        second.y = y2;
+        let (x3, y3) = next_duplicated_position(0, 0, 1920, 1080, &src, &[src.clone(), second]);
+        assert_eq!((x3, y3), (164, 184));
+
+        // 画面右下付近からはみ出す場合はモニタ領域内へ折り返す
+        let edge_src = WidgetConfig {
+            x: 1490,
+            y: 470,
+            width: 400,
+            height: 580,
+            enabled: true,
+            ..Default::default()
+        };
+        let (wx, wy) =
+            next_duplicated_position(0, 0, 1920, 1080, &edge_src, &[edge_src.clone()]);
+        assert!((24..=1920 - 400).contains(&wx));
+        assert!((24..=1080 - 580).contains(&wy));
+    }
+
+    #[test]
+    fn build_duplicated_widget_config_resets_isolation_and_lock() {
+        let src = WidgetConfig {
+            id: "legacy-id".to_string(),
+            title: "付箋メモ＆ToDo".to_string(),
+            source_type: SourceType::File,
+            source: "C:\\samples\\sticky-todo.html".to_string(),
+            enabled: true,
+            x: 40,
+            y: 40,
+            width: 400,
+            height: 580,
+            dpi_scale: 1.25,
+            opacity: 0.85,
+            zoom: 1.1,
+            locked: true,
+            click_through: true,
+            no_activate: true,
+            auto_reload_minutes: 15,
+            hide_scrollbar: true,
+            custom_css: "body { color: red; }".to_string(),
+            placement_mode: PlacementMode::WorkerW,
+            local_storage_isolated: false,
+        };
+        let dup =
+            build_duplicated_widget_config(&src, 72, 72, "付箋メモ＆ToDo 2".to_string());
+        assert_ne!(dup.id, src.id);
+        assert_eq!(dup.title, "付箋メモ＆ToDo 2");
+        assert_eq!(dup.source_type, SourceType::File);
+        assert_eq!(dup.source, src.source);
+        assert_eq!((dup.x, dup.y, dup.width, dup.height), (72, 72, 400, 580));
+        assert_eq!(dup.opacity, src.opacity);
+        assert_eq!(dup.zoom, src.zoom);
+        assert!(dup.no_activate);
+        assert_eq!(dup.auto_reload_minutes, 15);
+        assert_eq!(dup.custom_css, src.custom_css);
+        assert_eq!(dup.placement_mode, PlacementMode::WorkerW);
+        assert!(!dup.locked);
+        assert!(!dup.click_through);
+        assert!(dup.local_storage_isolated);
     }
 }

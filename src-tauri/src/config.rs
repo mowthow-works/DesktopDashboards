@@ -48,6 +48,7 @@ pub struct WidgetConfig {
     pub hide_scrollbar: bool,
     pub custom_css: String,
     pub placement_mode: PlacementMode,
+    pub local_storage_isolated: bool,
 }
 
 impl Default for WidgetConfig {
@@ -72,6 +73,7 @@ impl Default for WidgetConfig {
             hide_scrollbar: false,
             custom_css: String::new(),
             placement_mode: PlacementMode::Bottom,
+            local_storage_isolated: false,
         }
     }
 }
@@ -269,5 +271,31 @@ mod tests {
         assert_eq!(recovered.widgets[0].title, "First");
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_config_without_local_storage_isolated_defaults_to_false() {
+        let legacy_json = r#"{
+  "version": 1,
+  "placement_mode": "bottom",
+  "autostart": false,
+  "widgets": [
+    {
+      "id": "legacy-sticky-1",
+      "title": "付箋メモ＆ToDo",
+      "source_type": "file",
+      "source": "C:\\samples\\sticky-todo.html",
+      "enabled": true,
+      "x": 40,
+      "y": 40,
+      "width": 400,
+      "height": 580
+    }
+  ]
+}"#;
+        let cfg: AppConfig = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(cfg.widgets.len(), 1);
+        assert_eq!(cfg.widgets[0].id, "legacy-sticky-1");
+        assert!(!cfg.widgets[0].local_storage_isolated);
     }
 }

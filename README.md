@@ -63,10 +63,10 @@ Web URL だけでなく、ローカルに作成した HTML ファイルをデス
 
 インストーラにも同梱されており、そのままガジェットとして試したり、複製して自作ガジェットのベースにしたりできます。
 
-- `samples/sticky-todo.html`: **付箋メモ＆ToDoリスト** — `localStorage` による即時自動保存・リロードガード・フォーカス非奪取の体験用サンプル
+- `samples/sticky-todo.html`（＋`samples/sticky-todo.manifest.json`）: **付箋メモ＆ToDoリスト** — `localStorage` による即時自動保存・インスタンス分離（複数追加可）・リロードガード・フォーカス非奪取の体験用サンプル
 - `samples/pomodoro-timer.html`: **ポモドーロ集中タイマー** — 円形プログレスリング・チャイム通知（消音可）・当日完了数記録付きの作業用タイマー
 - `samples/starter-template.html`: **自作ガジェット用スターターテンプレート** — 上端 28px ホバーバー余白、同一フォルダ内の相対パス読み込み、外部リンクの既定ブラウザ起動、`localStorage` テスト、および manifest 無し制限モード確認付き
-- `samples/notion-today.html`（＋`samples/notion-today.manifest.json`）: **Notion 今日のタスク（公式サンプル1号）** — `DD.config.get()` による設定管理、Notion DB からの当日／期限切れ未完了タスク抽出、チェックボックス双方向書き戻し（`PATCH /v1/pages/*`）、タスククリックでの `DD.openUrl()` ブラウザ起動に対応
+- `samples/notion-today.html`（＋`samples/notion-today.manifest.json`）: **Notion 今日のタスク（公式サンプル1号）** — `DD.config.get()` による設定管理（複数 DB の並行配置にも対応）、Notion DB からの当日／期限切れ未完了タスク抽出、チェックボックス双方向書き戻し（`PATCH /v1/pages/*`）、タスククリックでの `DD.openUrl()` ブラウザ起動に対応
 - `samples/notion-spike.html`（＋`samples/notion-spike.manifest.json`）: **Notion API (`2025-09-03`) & `window.DD` ブリッジ検証サンプル** — `DD.storage`（ウィジェット分離ストレージ）と `DD.connect.request`（Windows 資格情報マネージャー連携・権限積集合判定）の動作確認用サンプル
 
 ### ローカル HTML 作成時のポイント
@@ -74,6 +74,8 @@ Web URL だけでなく、ローカルに作成した HTML ファイルをデス
 - **相対パス資産**: 選択した HTML と同じフォルダおよびサブフォルダ内の CSS / JS / 画像 / JSON 等は相対パスで読み込めます（`widgetfile` カスタムプロトコル経由・親ディレクトリ外への参照は遮断）。
 - **上端余白**: ロック解除時は上端 28px にホバー操作バーが表示されるため、`body` に `padding-top: 32px` 程度を確保すると操作しやすくなります。
 - **外部リンク**: `http://` / `https://` へのリンクはガジェット内ではなく OS の既定ブラウザで開きます。スクリプトから既定ブラウザを開く場合は `DD.openUrl(url)`（`http://` / `https://` 限定）を利用できます。
+- **`localStorage` のインスタンス分離**: ローカル HTML ガジェット（`SourceType::File`）のトップフレームではホスト側初期化スクリプトのシムが `widget_id` ごとに `localStorage` の名前空間を自動分離します。そのため `localStorage` を使う無改造の HTML でも複数枚並べて独立したデータを保持できます（分離導入前から登録されている既存ガジェットは、初回アクセス時に従来のキー値を非破壊で引き継ぎます）。
+- **複製可能ウィジェット（`"duplicable": true`）**: `<html_stem>.manifest.json` または `manifest.json` に `"duplicable": true` を宣言すると、ガジェット上端ホバーバーの `＋` ボタンおよび管理画面カードの `＋ 増やす` ボタンから、同じ HTML の空の新規インスタンス（連番タイトル・カスケード配置・`DD.storage` / `widget_config` / `localStorage` 初期状態）を追加できます（未宣言時は非表示、URL ガジェットは対象外）。
 - **`window.DD` ブリッジ（Phase 4b〜4c）**: ローカル HTML ガジェットのトップフレーム（`http://widgetfile.localhost`）にのみ注入され、ウィジェット単位の分離ストレージ（`DD.storage.get` / `set`、`%APPDATA%\DesktopDashboards\storage\{widget_id}.json` 保存）、ガジェット設定取得（`DD.config.get()`）、宣言的コネクタ経由の API ブリッジ（`DD.connect.request`）、および外部ブラウザ起動（`DD.openUrl`）を利用できます。URL ガジェットや外部 `<iframe>` からの呼び出しは Tauri ACL および Rust 側 `Origin` 検証で遮断されます。
   - **ガジェット設定フォーム自動生成（`DD.config`）**: ウィジェット manifest の `config_schema`（`string` / `boolean`）を定義すると、管理画面の各ガジェットカード内に「⚙ ウィジェット設定（`DD.config`）」フォームが自動生成されます。保存値は `%APPDATA%\DesktopDashboards\widget_config\{widget_id}.json` へ保存され、保存時にガジェットが自動リロードされて `await DD.config.get()` から取得できます。
   - **権限積集合と制限モード**: 同梱コネクタ定義（`connectors/notion.json` 等および `%APPDATA%\DesktopDashboards\connectors\*.json`）と、HTML と同じフォルダのウィジェット manifest（`<html_stem>.manifest.json` → `manifest.json`）双方の `endpoints` に一致するリクエストのみ許可されます。manifest が無いローカル HTML は制限モードとなり、`DD.storage` のみ利用できます（`DD.connect` は拒否）。

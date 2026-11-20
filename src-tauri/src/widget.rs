@@ -15,16 +15,277 @@ pub fn widget_label(widget_id: &str) -> String {
     format!("widget-{widget_id}")
 }
 
-/// ガジェット用 WebView ランタイムスクリプト（ホバー操作バー + リロードガード + カスタムCSS + Fileガジェット向けDDブリッジ）を生成する。
+/// ローカル HTML ガジェット (`SourceType::File`) のトップフレーム向け `localStorage` 名前空間シムを生成する。
+fn build_local_storage_shim_script(widget_id: &str, allow_legacy_local_storage: bool) -> String {
+    let widget_id_json = serde_json::to_string(widget_id).unwrap_or_else(|_| "\"\"".to_string());
+    let allow_legacy_str = if allow_legacy_local_storage {
+        "true"
+    } else {
+        "false"
+    };
+    let body = r#"
+  if (window === window.top && location.origin === 'http://widgetfile.localhost' && !window.__ddLocalStorageShimmed) {
+    let rawStorage = null;
+    try { rawStorage = window.localStorage; } catch (_) {}
+    if (rawStorage) {
+      const rawProto = window.Storage && window.Storage.prototype ? window.Storage.prototype : rawStorage;
+      const rawGet = (k) => rawProto.getItem.call(rawStorage, k);
+      const rawSet = (k, v) => rawProto.setItem.call(rawStorage, k, v);
+      const rawRemove = (k) => rawProto.removeItem.call(rawStorage, k);
+      const rawKey = (i) => rawProto.key.call(rawStorage, i);
+      const rawLen = () => rawStorage.length;
+
+      const PREFIX = '__dd_w:' + WIDGET_ID + ':';
+      const TOMBSTONE_KEY = '__dd_wt:' + WIDGET_ID;
+      const CLEARED_KEY = '__dd_wc:' + WIDGET_ID;
+      const isInternalKey = (k) =>
+        k.startsWith('__dd_w:') || k.startsWith('__dd_wt:') || k.startsWith('__dd_wc:');
+      const isLegacyCleared = () => ALLOW_LEGACY_FALLBACK && rawGet(CLEARED_KEY) === '1';
+
+      const readTombstones = () => {
+        if (!ALLOW_LEGACY_FALLBACK) return new Set();
+        try {
+          const raw = rawGet(TOMBSTONE_KEY);
+          if (!raw) return new Set();
+          const arr = JSON.parse(raw);
+          return Array.isArray(arr) ? new Set(arr.filter((x) => typeof x === 'string')) : new Set();
+        } catch (_) {
+          return new Set();
+        }
+      };
+
+      const writeTombstones = (set) => {
+        if (!ALLOW_LEGACY_FALLBACK) return;
+        try {
+          if (set.size === 0) {
+            rawRemove(TOMBSTONE_KEY);
+          } else {
+            rawSet(TOMBSTONE_KEY, JSON.stringify(Array.from(set)));
+          }
+        } catch (_) {}
+      };
+
+      const peekItem = (key) => {
+        const k = String(key);
+        const ownVal = rawGet(PREFIX + k);
+        if (ownVal !== null) return ownVal;
+        if (!ALLOW_LEGACY_FALLBACK || isLegacyCleared() || isInternalKey(k)) {
+          return null;
+        }
+        if (readTombstones().has(k)) {
+          return null;
+        }
+        return rawGet(k);
+      };
+
+      const getItem = (key) => {
+        const k = String(key);
+        const ownVal = rawGet(PREFIX + k);
+        if (ownVal !== null) return ownVal;
+        if (!ALLOW_LEGACY_FALLBACK || isLegacyCleared() || isInternalKey(k)) {
+          return null;
+        }
+        if (readTombstones().has(k)) {
+          return null;
+        }
+        const legacyVal = rawGet(k);
+        if (legacyVal !== null) {
+          try {
+            rawSet(PREFIX + k, legacyVal);
+          } catch (_) {}
+        }
+        return legacyVal;
+      };
+
+      const setItem = (key, value) => {
+        const k = String(key);
+        const v = String(value);
+        rawSet(PREFIX + k, v);
+        if (ALLOW_LEGACY_FALLBACK) {
+          const tomb = readTombstones();
+          if (tomb.delete(k)) {
+            writeTombstones(tomb);
+          }
+        }
+      };
+
+      const removeItem = (key) => {
+        const k = String(key);
+        rawRemove(PREFIX + k);
+        if (ALLOW_LEGACY_FALLBACK && !isLegacyCleared() && !isInternalKey(k)) {
+          if (rawGet(k) !== null) {
+            const tomb = readTombstones();
+            tomb.add(k);
+            writeTombstones(tomb);
+          }
+        }
+      };
+
+      const clear = () => {
+        const toRemove = [];
+        const total = rawLen();
+        for (let i = 0; i < total; i += 1) {
+          const rk = rawKey(i);
+          if (typeof rk === 'string' && rk.startsWith(PREFIX)) {
+            toRemove.push(rk);
+          }
+        }
+        for (const rk of toRemove) {
+          rawRemove(rk);
+        }
+        if (ALLOW_LEGACY_FALLBACK) {
+          rawSet(CLEARED_KEY, '1');
+          rawRemove(TOMBSTONE_KEY);
+        }
+      };
+
+      const listLogicalKeys = () => {
+        const seen = new Set();
+        const result = [];
+        const tomb = ALLOW_LEGACY_FALLBACK && !isLegacyCleared() ? readTombstones() : null;
+        const total = rawLen();
+        for (let i = 0; i < total; i += 1) {
+          const rk = rawKey(i);
+          if (typeof rk !== 'string') continue;
+          if (rk.startsWith(PREFIX)) {
+            const logical = rk.slice(PREFIX.length);
+            if (!seen.has(logical)) {
+              seen.add(logical);
+              result.push(logical);
+            }
+          } else if (
+            ALLOW_LEGACY_FALLBACK &&
+            !isLegacyCleared() &&
+            !isInternalKey(rk) &&
+            !(tomb && tomb.has(rk))
+          ) {
+            if (!seen.has(rk)) {
+              seen.add(rk);
+              result.push(rk);
+            }
+          }
+        }
+        return result;
+      };
+
+      const api = {
+        getItem: (k) => getItem(k),
+        setItem: (k, v) => setItem(k, v),
+        removeItem: (k) => removeItem(k),
+        clear: () => clear(),
+        key: (idx) => {
+          const keys = listLogicalKeys();
+          const i = Number(idx) >>> 0;
+          return i < keys.length ? keys[i] : null;
+        },
+      };
+
+      const lsProxy = new Proxy(api, {
+        get(target, prop) {
+          if (prop === 'length') return listLogicalKeys().length;
+          if (Object.prototype.hasOwnProperty.call(target, prop)) {
+            return target[prop];
+          }
+          if (typeof prop === 'symbol') {
+            return Reflect.get(target, prop);
+          }
+          const val = peekItem(prop);
+          if (val !== null) return val;
+          if (prop in Object.prototype) {
+            return Reflect.get(Object.prototype, prop);
+          }
+          return undefined;
+        },
+        set(target, prop, value) {
+          if (typeof prop === 'symbol') return false;
+          if (prop === 'length' || Object.prototype.hasOwnProperty.call(target, prop)) {
+            return true;
+          }
+          setItem(prop, value);
+          return true;
+        },
+        deleteProperty(_target, prop) {
+          if (typeof prop === 'symbol') return false;
+          removeItem(prop);
+          return true;
+        },
+        has(target, prop) {
+          if (typeof prop === 'symbol') return false;
+          if (prop === 'length' || Object.prototype.hasOwnProperty.call(target, prop)) return true;
+          return peekItem(prop) !== null;
+        },
+        ownKeys() {
+          return listLogicalKeys();
+        },
+        getOwnPropertyDescriptor(_target, prop) {
+          if (typeof prop !== 'string') return undefined;
+          const keys = listLogicalKeys();
+          if (!keys.includes(prop)) return undefined;
+          const val = peekItem(prop);
+          return {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: val === null ? '' : val,
+          };
+        },
+      });
+
+      try {
+        Object.defineProperty(window, 'localStorage', {
+          get() { return lsProxy; },
+          configurable: false,
+          enumerable: true,
+        });
+        window.__ddLocalStorageShimmed = true;
+        window.__ddClearOwnLocalStorage = () => {
+          const toRemove = [];
+          const total = rawLen();
+          for (let i = 0; i < total; i += 1) {
+            const rk = rawKey(i);
+            if (
+              typeof rk === 'string' &&
+              (rk.startsWith(PREFIX) || rk === TOMBSTONE_KEY || rk === CLEARED_KEY)
+            ) {
+              toRemove.push(rk);
+            }
+          }
+          for (const rk of toRemove) {
+            rawRemove(rk);
+          }
+        };
+      } catch (_) {}
+    }
+  }
+"#;
+    format!(
+        "\n  (() => {{\n    const WIDGET_ID = {widget_id_json};\n    const ALLOW_LEGACY_FALLBACK = {allow_legacy_str};{body}  }})();\n"
+    )
+}
+
+/// ガジェット用 WebView ランタイムスクリプト（ホバー操作バー + リロードガード + カスタムCSS + Fileガジェット向けDDブリッジ/localStorage分離）を生成する。
 fn build_widget_init_script(
+    widget_id: &str,
     locked: bool,
     home_url: &str,
     custom_css: &str,
     inject_dd_bridge: bool,
+    allow_legacy_local_storage: bool,
+    duplicable: bool,
 ) -> String {
     let home_json = serde_json::to_string(home_url).unwrap_or_else(|_| "\"\"".to_string());
     let css_json = serde_json::to_string(custom_css).unwrap_or_else(|_| "\"\"".to_string());
     let locked_str = if locked { "true" } else { "false" };
+    let duplicate_btn_script = if inject_dd_bridge && duplicable {
+        "    btnGroup.appendChild(mkBtn('＋', '新しいウィンドウを増やす', () => invokeAction('duplicate')));\n"
+    } else {
+        ""
+    };
+    let local_storage_shim_script = if inject_dd_bridge {
+        build_local_storage_shim_script(widget_id, allow_legacy_local_storage)
+    } else {
+        String::new()
+    };
     let dd_bridge_script = if inject_dd_bridge {
         r#"
   if (window === window.top && location.origin === 'http://widgetfile.localhost' && !window.DD) {
@@ -113,7 +374,7 @@ fn build_widget_init_script(
   document.addEventListener('keydown', markInteraction, true);
   document.addEventListener('input', markInteraction, true);
   document.addEventListener('focusin', markInteraction, true);
-{dd_bridge_script}
+{local_storage_shim_script}{dd_bridge_script}
   function isUserEditingOrActive() {{
     if (typeof __ddHasActiveMutations === 'function' && __ddHasActiveMutations()) {{
       return true;
@@ -227,7 +488,7 @@ fn build_widget_init_script(
       return b;
     }};
 
-    btnGroup.appendChild(mkBtn('⌂', 'ホームへ戻る', () => invokeAction('home')));
+{duplicate_btn_script}    btnGroup.appendChild(mkBtn('⌂', 'ホームへ戻る', () => invokeAction('home')));
     btnGroup.appendChild(mkBtn('↻', '再読み込み', () => invokeAction('reload')));
     btnGroup.appendChild(mkBtn('🔒', 'ロックする', () => invokeAction('lock')));
     btnGroup.appendChild(mkBtn('✕', '閉じる（非表示）', () => invokeAction('close')));
@@ -382,11 +643,20 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
     let target_w = widget.width.max(120);
     let target_h = widget.height.max(80);
     let inject_dd_bridge = widget.source_type == SourceType::File;
+    let allow_legacy_local_storage = inject_dd_bridge && !widget.local_storage_isolated;
+    let duplicable = if inject_dd_bridge {
+        crate::dd_bridge::is_widget_duplicable(&app, &widget)
+    } else {
+        false
+    };
     let init_script = build_widget_init_script(
+        &widget.id,
         widget.locked,
         &home_url_str,
         &widget.custom_css,
         inject_dd_bridge,
+        allow_legacy_local_storage,
+        duplicable,
     );
 
     let mut builder = WebviewWindowBuilder::new(&app, &label, webview_url)
@@ -503,6 +773,19 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
 pub fn close_widget_window(app: &AppHandle, widget_id: &str) {
     let label = widget_label(widget_id);
     if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.close();
+    }
+}
+
+/// ガジェット専用の `localStorage` 名前空間をクリアした上でウィンドウを破棄（close）する。
+pub async fn clear_storage_and_close_widget_window(app: &AppHandle, widget_id: &str) {
+    let label = widget_label(widget_id);
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.eval("window.__ddClearOwnLocalStorage && window.__ddClearOwnLocalStorage();");
+        let _ = tauri::async_runtime::spawn_blocking(|| {
+            std::thread::sleep(Duration::from_millis(60));
+        })
+        .await;
         let _ = win.close();
     }
 }
@@ -758,8 +1041,15 @@ mod tests {
 
     #[test]
     fn init_script_injects_dd_bridge_only_for_file_widgets() {
-        let file_script =
-            build_widget_init_script(false, "http://widgetfile.localhost/w1/", "", true);
+        let file_script = build_widget_init_script(
+            "w1",
+            false,
+            "http://widgetfile.localhost/w1/",
+            "",
+            true,
+            false,
+            false,
+        );
         assert!(file_script.contains("if (window !== window.top) return;"));
         assert!(file_script.contains(
             "window === window.top && location.origin === 'http://widgetfile.localhost' && !window.DD"
@@ -773,7 +1063,15 @@ mod tests {
         assert!(file_script.contains("dd_open_url"));
         assert!(file_script.contains("inFlightMutations"));
 
-        let url_script = build_widget_init_script(false, "https://example.com/", "", false);
+        let url_script = build_widget_init_script(
+            "w-url",
+            false,
+            "https://example.com/",
+            "",
+            false,
+            false,
+            false,
+        );
         assert!(url_script.contains("if (window !== window.top) return;"));
         assert!(!url_script.contains("Object.defineProperty(window, 'DD'"));
         assert!(!url_script.contains("dd_storage_get"));
@@ -782,5 +1080,40 @@ mod tests {
         assert!(!url_script.contains("dd_config_get"));
         assert!(!url_script.contains("dd_open_url"));
         assert!(!url_script.contains("inFlightMutations"));
+        assert!(!url_script.contains("__ddLocalStorageShimmed"));
+        assert!(!url_script.contains("invokeAction('duplicate')"));
+    }
+
+    #[test]
+    fn init_script_local_storage_shim_and_duplicate_button() {
+        let legacy_dup = build_widget_init_script(
+            "legacy-1",
+            false,
+            "http://widgetfile.localhost/legacy-1/",
+            "",
+            true,
+            true,
+            true,
+        );
+        assert!(legacy_dup.contains(r#"const WIDGET_ID = "legacy-1";"#));
+        assert!(legacy_dup.contains("const ALLOW_LEGACY_FALLBACK = true;"));
+        assert!(legacy_dup.contains("__ddLocalStorageShimmed"));
+        assert!(legacy_dup.contains("__ddClearOwnLocalStorage"));
+        assert!(legacy_dup.contains("invokeAction('duplicate')"));
+        assert!(legacy_dup.contains("新しいウィンドウを増やす"));
+
+        let isolated_non_dup = build_widget_init_script(
+            "dup-2",
+            false,
+            "http://widgetfile.localhost/dup-2/",
+            "",
+            true,
+            false,
+            false,
+        );
+        assert!(isolated_non_dup.contains(r#"const WIDGET_ID = "dup-2";"#));
+        assert!(isolated_non_dup.contains("const ALLOW_LEGACY_FALLBACK = false;"));
+        assert!(isolated_non_dup.contains("__ddLocalStorageShimmed"));
+        assert!(!isolated_non_dup.contains("invokeAction('duplicate')"));
     }
 }

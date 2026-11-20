@@ -26,6 +26,7 @@
     "allow-delete-connection",
     "allow-test-connection",
     "allow-get-widget-config-form",
-    "allow-save-widget-config"
+    "allow-save-widget-config",
+    "allow-duplicate-widget"
   ]
 }

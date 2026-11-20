@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-duplicate-widget"
+description = "Enables the duplicate_widget command without any pre-configured scope."
+commands.allow = ["duplicate_widget"]
+
+[[permission]]
+identifier = "deny-duplicate-widget"
+description = "Denies the duplicate_widget command without any pre-configured scope."
+commands.deny = ["duplicate_widget"]

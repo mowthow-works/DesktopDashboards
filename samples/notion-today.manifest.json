@@ -3,6 +3,7 @@
   "name": "Notion 今日のタスク",
   "version": "0.2.0",
   "entry": "notion-today.html",
+  "duplicable": true,
   "connections": [
     {
       "connection": "*",

@@ -1,0 +1,7 @@
+{
+  "id": "sticky-todo",
+  "name": "付箋メモ＆ToDo",
+  "version": "0.2.0",
+  "entry": "sticky-todo.html",
+  "duplicable": true
+}

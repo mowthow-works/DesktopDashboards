@@ -923,6 +923,27 @@
         const actions = document.createElement("div");
         actions.className = "widget-actions";
 
+        if (w.source_type === "file" && configForm?.duplicable === true) {
+          const btnDuplicate = document.createElement("button");
+          btnDuplicate.type = "button";
+          btnDuplicate.className = "secondary";
+          btnDuplicate.textContent = "＋ 増やす";
+          btnDuplicate.title = "同じウィジェットの空の新規インスタンスを追加";
+          btnDuplicate.addEventListener("click", async () => {
+            btnDuplicate.disabled = true;
+            try {
+              const created = await invoke("duplicate_widget", { id: w.id });
+              setStatus(`「${created?.title || w.title}」を新規追加しました。`);
+              await refreshWidgets();
+            } catch (err) {
+              setStatus(`複製エラー: ${err}`, true);
+            } finally {
+              btnDuplicate.disabled = false;
+            }
+          });
+          actions.appendChild(btnDuplicate);
+        }
+
         const btnReload = document.createElement("button");
         btnReload.className = "secondary";
         btnReload.textContent = "再読込";

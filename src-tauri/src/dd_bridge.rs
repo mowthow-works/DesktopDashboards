@@ -146,6 +146,7 @@ pub struct ConfigFieldSchema {
 pub struct WidgetConfigFormDto {
     pub widget_id: String,
     pub has_manifest: bool,
+    pub duplicable: bool,
     pub manifest_id: Option<String>,
     pub manifest_name: Option<String>,
     pub schema: Vec<ConfigFieldSchema>,
@@ -160,6 +161,8 @@ pub struct WidgetManifest {
     pub version: Option<String>,
     #[serde(default)]
     pub entry: Option<String>,
+    #[serde(default)]
+    pub duplicable: bool,
     #[serde(default)]
     pub connector: Option<String>,
     #[serde(default)]
@@ -1164,6 +1167,29 @@ pub fn load_widget_manifest_for_html(html_path: &Path) -> Result<Option<WidgetMa
     }
 
     Ok(None)
+}
+
+/// HTML パスに対応するウィジェットが複製可能 (`"duplicable": true`) かどうかを返す。
+pub fn is_html_duplicable(html_path: &Path) -> Result<bool, String> {
+    Ok(load_widget_manifest_for_html(html_path)?.is_some_and(|m| m.duplicable))
+}
+
+/// 登録済みウィジェットが複製可能（`SourceType::File` かつ manifest で `"duplicable": true`）かを判定する。
+pub fn is_widget_duplicable(app: &AppHandle, widget: &WidgetConfig) -> bool {
+    if widget.source_type != SourceType::File {
+        return false;
+    }
+    let html_path = resolve_widget_html_path(app, widget);
+    match is_html_duplicable(&html_path) {
+        Ok(val) => val,
+        Err(reason) => {
+            eprintln!(
+                "[dd_bridge] failed to inspect duplicable manifest for widget '{}': {reason}",
+                widget.id
+            );
+            false
+        }
+    }
 }
 
 /// コネクタ定義とウィジェット manifest の権限積集合および送信先 HTTPS/allowed_hosts を検証する。
@@ -2260,6 +2286,7 @@ pub fn read_widget_config_form_for_widget(
         return Ok(WidgetConfigFormDto {
             widget_id: widget.id.clone(),
             has_manifest: false,
+            duplicable: false,
             manifest_id: None,
             manifest_name: None,
             schema: Vec::new(),
@@ -2271,6 +2298,7 @@ pub fn read_widget_config_form_for_widget(
         return Ok(WidgetConfigFormDto {
             widget_id: widget.id.clone(),
             has_manifest: false,
+            duplicable: false,
             manifest_id: None,
             manifest_name: None,
             schema: Vec::new(),
@@ -2289,6 +2317,7 @@ pub fn read_widget_config_form_for_widget(
     Ok(WidgetConfigFormDto {
         widget_id: widget.id.clone(),
         has_manifest: true,
+        duplicable: manifest.duplicable,
         manifest_id: Some(manifest.id),
         manifest_name: Some(manifest.name),
         schema: manifest.config_schema,
@@ -2344,6 +2373,7 @@ pub fn save_widget_config_values(
     Ok(WidgetConfigFormDto {
         widget_id: widget_id.to_string(),
         has_manifest: true,
+        duplicable: manifest.duplicable,
         manifest_id: Some(manifest.id),
         manifest_name: Some(manifest.name),
         schema: manifest.config_schema,
@@ -3686,5 +3716,120 @@ mod tests {
             "/v1/databases/db-1"
         )
         .is_err());
+    }
+
+    #[test]
+    fn duplicable_capabilities_isolate_manager_command() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let widgets_dd: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets-dd.json")).unwrap(),
+        )
+        .unwrap();
+        let default_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("default.json")).unwrap(),
+        )
+        .unwrap();
+        let widgets_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets.json")).unwrap(),
+        )
+        .unwrap();
+
+        let def_perms = default_cap.get("permissions").and_then(Value::as_array).unwrap();
+        assert!(def_perms.iter().any(|v| v.as_str() == Some("allow-duplicate-widget")));
+
+        assert_eq!(widgets_dd.get("local"), Some(&json!(true)));
+        assert!(widgets_dd.get("remote").is_none());
+        let dd_perms = widgets_dd.get("permissions").and_then(Value::as_array).unwrap();
+        assert!(!dd_perms.iter().any(|v| v.as_str() == Some("allow-duplicate-widget")));
+
+        let w_perms = widgets_cap.get("permissions").and_then(Value::as_array).unwrap();
+        assert!(!w_perms.iter().any(|v| v.as_str() == Some("allow-duplicate-widget")));
+    }
+
+    #[test]
+    fn widget_manifest_duplicable_flag_and_bundled_samples() {
+        let omitted = parse_and_validate_widget_manifest(
+            r#"{"id":"plain","name":"Plain Widget"}"#,
+        )
+        .unwrap();
+        assert!(!omitted.duplicable);
+
+        let enabled = parse_and_validate_widget_manifest(
+            r#"{"id":"sticky","name":"Sticky","entry":"sticky.html","duplicable":true}"#,
+        )
+        .unwrap();
+        assert!(enabled.duplicable);
+
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let samples_dir = repo_root.join("samples");
+        assert!(is_html_duplicable(&samples_dir.join("sticky-todo.html")).unwrap());
+        assert!(is_html_duplicable(&samples_dir.join("notion-today.html")).unwrap());
+        assert!(!is_html_duplicable(&samples_dir.join("pomodoro-timer.html")).unwrap());
+        assert!(!is_html_duplicable(&samples_dir.join("starter-template.html")).unwrap());
+        assert!(!is_html_duplicable(&samples_dir.join("notion-spike.html")).unwrap());
+
+        // sticky-todo は manifest はあるが connections / endpoints が空なので DD.connect は拒否される
+        let notion = parse_and_validate_connector(BUILTIN_NOTION_CONNECTOR_JSON).unwrap();
+        let sticky_manifest = load_widget_manifest_for_html(&samples_dir.join("sticky-todo.html"))
+            .unwrap()
+            .unwrap();
+        assert!(verify_endpoint_intersection(
+            &notion,
+            &sticky_manifest,
+            "notion",
+            "GET",
+            "/v1/users/me"
+        )
+        .is_err());
+
+        // read_widget_config_form_for_widget が duplicable を正しく伝搬する
+        let tmp = std::env::temp_dir().join(format!("dd_dup_form_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp).unwrap();
+
+        let file_sticky = WidgetConfig {
+            id: "w-sticky".to_string(),
+            source_type: SourceType::File,
+            source: samples_dir.join("sticky-todo.html").to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let sticky_form = read_widget_config_form_for_widget(
+            &tmp,
+            &file_sticky,
+            &samples_dir.join("sticky-todo.html"),
+        )
+        .unwrap();
+        assert!(sticky_form.has_manifest);
+        assert!(sticky_form.duplicable);
+
+        let file_pomodoro = WidgetConfig {
+            id: "w-pomo".to_string(),
+            source_type: SourceType::File,
+            source: samples_dir.join("pomodoro-timer.html").to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let pomo_form = read_widget_config_form_for_widget(
+            &tmp,
+            &file_pomodoro,
+            &samples_dir.join("pomodoro-timer.html"),
+        )
+        .unwrap();
+        assert!(!pomo_form.has_manifest);
+        assert!(!pomo_form.duplicable);
+
+        let url_widget = WidgetConfig {
+            id: "w-url".to_string(),
+            source_type: SourceType::Url,
+            source: "https://example.com".to_string(),
+            ..Default::default()
+        };
+        let url_form = read_widget_config_form_for_widget(
+            &tmp,
+            &url_widget,
+            &samples_dir.join("sticky-todo.html"),
+        )
+        .unwrap();
+        assert!(!url_form.duplicable);
+
+        let _ = fs::remove_dir_all(&tmp);
     }
 }

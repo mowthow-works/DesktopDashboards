@@ -393,6 +393,12 @@
           "markdownDescription": "Enables the delete_widget command without any pre-configured scope."
         },
         {
+          "description": "Enables the duplicate_widget command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-duplicate-widget",
+          "markdownDescription": "Enables the duplicate_widget command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_autostart command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-autostart",
@@ -547,6 +553,12 @@
           "type": "string",
           "const": "deny-delete-widget",
           "markdownDescription": "Denies the delete_widget command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the duplicate_widget command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-duplicate-widget",
+          "markdownDescription": "Denies the duplicate_widget command without any pre-configured scope."
         },
         {
           "description": "Denies the get_autostart command without any pre-configured scope.",
