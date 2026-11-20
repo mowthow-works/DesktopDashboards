@@ -1,4 +1,4 @@
-# DesktopDashboards 仕様書（SPEC・ドラフト v0.3）
+# DesktopDashboards 仕様書（SPEC・v0.2.0 実装反映版）
 
 - **リポジトリ名**: `DesktopDashboards`
 - **アプリ愛称**: 未定（仮称：`DesktopDashboards`）
@@ -52,7 +52,7 @@
 ## 3. 壁紙張り付き（デスクトップ固定）仕様
 
 Windows 環境で「他ウィンドウの邪魔にならず、壁紙のように張り付く」挙動を実現するため、2つの固定モードを提供する。  
-`placement_mode` は**アプリ全体のグローバル設定**とし、全ガジェットに統一適用する（モード混在による座標管理の複雑化を避けるため）。
+`AppConfig.placement_mode` が新規作成時の既定配置モードとなり、現行実装では `WidgetConfig.placement_mode` によりガジェット個別にも「最背面固定（Bottom）」と「壁紙レイヤー埋め込み（WorkerW）」を切り替えられる。
 
 ### 3.1 モード A：最背面固定モード（デフォルト・安定重視）
 
@@ -75,9 +75,11 @@ Windows 環境で「他ウィンドウの邪魔にならず、壁紙のように
 
 設定ファイルは `%APPDATA%\DesktopDashboards\config.json` に保存する。
 
-#### 原子的書き込み・バックアップ
+#### 原子的書き込み・バックアップ・自動起動復元・初回初期化
 - 位置・サイズ変更時のデバウンス保存や設定変更時は、直接 `config.json` を上書きせず、**一時ファイル（`config.json.tmp`）へ書き込み・flush してからリネーム置換**する原子的書き込みを行う。
 - 正常な設定を 1世代バックアップ（`config.json.bak`）として保持し、万が一破損時は自動フォールバックする。
+- Windows 自動起動設定（`autostart`）も `config.json` に保存し、バージョンアップ（上書きインストール）等で OS 側のスタートアップ登録が消去された場合でも次回起動時に自動復元する。
+- `config.json` と `config.json.bak` のどちらも存在しない初回起動時に限り、同梱サンプルの `samples/sticky-todo.html`（「付箋メモ＆ToDo」）を 1 件デフォルト登録する。
 
 ```json
 {
@@ -103,7 +105,9 @@ Windows 環境で「他ウィンドウの邪魔にならず、壁紙のように
       "no_activate": false,
       "auto_reload_minutes": 0,
       "hide_scrollbar": true,
-      "custom_css": ""
+      "custom_css": "",
+      "placement_mode": "bottom",
+      "local_storage_isolated": true
     }
   ]
 }
@@ -111,7 +115,7 @@ Windows 環境で「他ウィンドウの邪魔にならず、壁紙のように
 
 #### ローカル HTML の扱い（`source_type: "file"`）
 - `source_type` は `"url"` または `"file"` とする。
-- `"file"` の場合、`source` にローカル HTML ファイルの絶対パスを保持し、Tauri のカスタムプロトコル（または許可されたローカル読み込み機構）経由で安全なスコープのもと表示する。
+- `"file"` の場合、`source` にローカル HTML ファイルのパスを保持し、登録済みカスタムプロトコル `widgetfile`（`http://widgetfile.localhost/{widget_id}/...`）経由で安全なスコープのもと配信・表示する。
 
 ### 4.2 座標系とマルチモニタ DPI 対応
 
@@ -162,13 +166,18 @@ Windows 環境で「他ウィンドウの邪魔にならず、壁紙のように
 
 ### 5.2 管理画面（Dashboard Manager）
 
-- **新規ガジェット追加**: URL またはローカル HTML ファイルを選択し、タイトルを入力して即作成。
+- **新規ガジェット追加**: URL またはローカル HTML ファイルを選択し、タイトルを入力して即作成（「参照...」ダイアログは同梱 `samples/` を初期表示）。
 - **ガジェットカード一覧**:
   - 表示 ON / OFF スイッチ
   - ロック / クリック透過 / フォーカス非奪取 トグル
-  - 詳細設定（透明度スライダー、ズーム、自動リロード間隔、スクロールバー非表示、カスタム CSS）
+  - 配置モード（最背面固定 / 壁紙レイヤー埋め込み）切替
+  - 詳細設定（透明度スライダー、ズーム倍率、自動リロード間隔、スクロールバー非表示、カスタム CSS）
+  - **⚙ ウィジェット設定（`DD.config`）**: manifest に `config_schema` があるローカル HTML ウィジェットで動的フォームを自動生成
+  - **＋ 増やす**: manifest に `"duplicable": true` が宣言されたローカル HTML ウィジェットで新規インスタンスを追加
   - 「位置を中央にリセット」ボタン（画面外迷子対策）
   - 削除ボタン
+- **外部サービス接続（SaaS 連携）**: 接続先一覧・追加（送信先明示＋`credential_schema` 動的フォーム）・トークン差し替え・削除・接続テスト・設定ガイド表示
+- **システム設定**: Windows 起動時の自動起動（`--silent`）トグル
 
 ---
 
@@ -205,3 +214,66 @@ Windows 環境で「他ウィンドウの邪魔にならず、壁紙のように
   - Explorer の再起動や壁紙スライドショー切替で `WorkerW` が再生成された際の**自動再アタッチ**（`TaskbarCreated` 検知等）も併せて検証する。
 - カスタム CSS 注入機能
 - `Muse Desktop Mascot` 側へのバンドル＆キック機能組み込み
+
+---
+
+## 8. Phase 4: ローカル HTML ブリッジ・宣言的コネクタ・複製可能ウィジェット（実装済み）
+
+### 8.1 ローカル HTML 配信と作成時の技術仕様
+- **カスタムプロトコル配信**: ローカル HTML ガジェット（`SourceType::File`）は `widgetfile` カスタムプロトコル（オリジン `http://widgetfile.localhost/{widget_id}/...`）経由で配信される。
+- **相対パス資産の読み込み**: 選択した HTML と同じフォルダおよびサブフォルダ内の CSS / JS / 画像 / JSON 等は相対パスで読み込める（親ディレクトリ外へのパス参照は遮断）。
+- **上端余白**: ロック解除時は上端 28px にホバー操作バー（ドラッグ移動・タイトル・複製・ホーム・リロード・ロック・閉じる）が表示されるため、ウィジェット側 `body` に `padding-top: 32px` 程度を確保することが推奨される。
+- **外部リンク**: `http://` / `https://` へのリンク遷移やスクリプトからの `DD.openUrl(url)` 呼び出しは、ガジェット内ではなく OS の既定ブラウザで開く。
+
+### 8.2 `window.DD` ブリッジ API と多層防御
+
+ローカル HTML ガジェットのトップフレームには、以下の読み取り専用ブリッジ `window.DD` が注入される（`Object.freeze` / `writable: false` / `configurable: false`）。
+
+| API | 用途・保存先 / 挙動 |
+| :--- | :--- |
+| `await DD.storage.get(key)` | ウィジェット単位の永続値を取得（キー未存在時は `null`）。 |
+| `await DD.storage.set(key, value)` | ウィジェット単位の永続値を保存（`null` / `undefined` で削除）。保存先は `%APPDATA%\DesktopDashboards\storage\{widget_id}.json`。 |
+| `await DD.config.get()` | 管理画面で保存したウィジェット設定（`%APPDATA%\DesktopDashboards\widget_config\{widget_id}.json`）を取得。 |
+| `await DD.connect.request({ connection, method, path, body })` | 宣言的コネクタ経由で外部 API をプロキシ実行。`GET` / `HEAD` 以外のミューテーション実行時は `inFlightMutations` を加算し、自動リロードガードで書き込み中の再読込を延期する。 |
+| `await DD.openUrl(url)` | `http://` または `https://` のみ許可して OS 既定ブラウザで開く（危険なスキームは拒否）。 |
+
+#### 多層防御（ACL・フレーム境界・Origin 検証）
+1. **初期化スクリプト制限**: `window === window.top` かつ `location.origin === 'http://widgetfile.localhost'` のときのみ `window.DD` を定義し、外部 `<iframe>` 等のサブフレームへ露出させない。
+2. **Tauri v2 Capability 分離**:
+   - `src-tauri/capabilities/widgets-dd.json`: `windows: ["widget-*"]`、`local: true`（`remote` 未定義）として `allow-dd-*` 権限をローカルカスタムプロトコル起点のみに限定。
+   - `src-tauri/capabilities/widgets.json`: URL ガジェット向け（`http://*`, `https://*`）。`allow-dd-*` 権限は一切付与しない。
+   - `src-tauri/capabilities/default.json`: 管理画面（`manager` ウィンドウ）専用の管理・接続・設定コマンドを分離。
+3. **Rust 側コマンド強制検証**: `dd_*` 全コマンドで、呼び出し元ウィンドウの `SourceType::File` と IPC リクエストの `Origin` ヘッダ（`http://widgetfile.localhost`）を都度検証する。
+
+### 8.3 宣言的コネクタエンジン・manifest 権限積集合・制限モード
+- **コネクタ定義（`connectors/*.json`）**:
+  - アプリ同梱コネクタ（`connectors/notion.json`、`Notion-Version: 2025-09-03` など）およびユーザー配置コネクタ（`%APPDATA%\DesktopDashboards\connectors\*.json`）を読み込む。
+  - `base_url`、`allowed_hosts`、`auth`、`headers`、`credential_schema`、`test`、`endpoints` を宣言的に定義する。
+- **ウィジェット manifest の探索優先順位**:
+  - HTML と同じフォルダ内の `<html_stem>.manifest.json` を優先し、無ければ同フォルダの `manifest.json` を読み込む。
+- **権限積集合と制限モード**:
+  - `DD.connect.request` は **コネクタ定義の `endpoints`** と **ウィジェット manifest の `connections[].endpoints`** の双方に一致し、かつ `allowed_hosts` ガードを通過するリクエストのみ許可する。
+  - manifest が存在しないローカル HTML は**制限モード**となり、`DD.storage` のみ利用可能で `DD.connect` は拒否される。
+
+### 8.4 ガジェット設定フォーム自動生成（`DD.config`）
+- ウィジェット manifest に `config_schema`（`string` / `boolean` 型）を定義すると、管理画面のガジェットカード内に **「⚙ ウィジェット設定（`DD.config`）」** フォームが自動生成される。
+- 保存先は `%APPDATA%\DesktopDashboards\widget_config\{widget_id}.json` で、保存時に該当ガジェットが自動リロードされ、`await DD.config.get()` から最新値（未保存の任意項目は規定値・空文字）を取得できる。
+
+### 8.5 外部サービス接続管理 UI と Windows 資格情報マネージャー連携
+- 管理画面の「外部サービス接続（SaaS 連携）」パネルから、公式マークおよび送信先（`base_url` / `allowed_hosts`）を確認しながら接続の追加・トークン差し替え・削除・接続テスト・設定ガイド表示を行える。
+- API トークン等の秘密情報は **Windows 資格情報マネージャー（Generic Credential）** にターゲット名 `DesktopDashboards:connection:<connection_id>:<credential_key>` で暗号化保管される。
+- `%APPDATA%\DesktopDashboards\connections.json`（v2 形式）には秘密を含まないメタ情報のみを保持する（旧 v1 形式の平文トークンが残存する場合は起動時に資格情報マネージャーへ自動移行・消去する）。
+
+### 8.6 複製可能ウィジェット（`"duplicable": true`）と `localStorage` 名前空間分離
+- **複製可能ウィジェット（複数インスタンス追加）**:
+  - ウィジェット manifest に `"duplicable": true` を宣言すると、ガジェット上端ホバーバーの `＋` ボタンおよび管理画面カードの `＋ 増やす` ボタンが表示される（未宣言時は非表示、URL ガジェットは対象外）。
+  - 実行時は同一 HTML を参照する空の新規インスタンスを生成する（連番タイトル付与、カスケード配置、`DD.storage` / `widget_config` / `localStorage` は初期状態、`locked` 解除）。
+- **`localStorage` のインスタンス分離と Lazy Adopt**:
+  - ローカル HTML ガジェット（`SourceType::File`）のトップフレームでは、ホスト側初期化スクリプトのシムが `widget_id` ごとに `localStorage` キーの名前空間を自動分離する。これにより `localStorage` を使用する無改造の HTML でも複数枚並べて独立したデータを保持できる。
+  - 既存データの非破壊引き継ぎ（Lazy Adopt）：分離導入前から存在するレガシーガジェット（`local_storage_isolated: false`）は、初回アクセス時に従来の共有キー値を自身の `widget_id` 名前空間へ非破壊で取り込んだ上で利用を継続する。新規追加・複製・初回サンプル生成時は `local_storage_isolated: true` で開始する。
+
+### 8.7 配布形式および開発・検証用サンプル
+- **配布パッケージ**:
+  - 日本語・英語対応の Per-user NSIS インストーラ（`DesktopDashboards_x64-setup.exe`）およびポータブル ZIP アーカイブ（`DesktopDashboards-windows-x64.zip`）の両方に `samples/` および `connectors/` を同梱する。
+- **開発・検証用サンプル**:
+  - `samples/notion-spike.html`（＋`samples/notion-spike.manifest.json`）：Notion API（`2025-09-03`）および `window.DD` ブリッジ（`DD.storage` / `DD.connect.request` / manifest 権限積集合・資格情報マネージャー連携）の動作確認・開発検証用サンプル。
