@@ -1,12 +1,12 @@
 # DesktopDashboards
 
-[![Release](https://img.shields.io/badge/version-v0.1.0-blue.svg)](https://github.com/mowthow-works/DesktopDashboards/releases)
+[![Release](https://img.shields.io/badge/version-v0.2.0-blue.svg)](https://github.com/mowthow-works/DesktopDashboards/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://www.microsoft.com/windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 任意の Web アプリ、AI アーティファクト（Muse Spaces 等）、ローカル HTML ファイルを Windows のデスクトップ（最背面／壁紙レイヤー）に複数並べて常駐表示できる、Tauri v2 + WebView2 製の軽量デスクトップガジェットアプリです。
 
-## 主な機能（Phase 1〜3 実装済み）
+## 主な機能（Phase 1〜4 実装済み）
 
 - **汎用 Web デスクトップガジェット**: Web URL およびローカル HTML ファイル（`widgetfile` カスタムプロトコル経由）をデスクトップウィジェットとして表示
 - **セッション維持・分離**: 専用の WebView2 `user_data_dir`（`%LOCALAPPDATA%\DesktopDashboards\webview`）を使用し、他アプリとのロック競合を防ぎつつガジェット間でログイン状態を共有
@@ -29,6 +29,7 @@
 - **設定の原子的永続化＆自動起動の自動復元**: `%APPDATA%\DesktopDashboards\config.json` への原子的書き込み（`.tmp` + flush + リネーム）および 1 世代バックアップ（`.bak`）フォールバック。Windows 自動起動設定も `config.json` に保存され、バージョンアップ（上書きインストール）等で OS 側スタートアップ登録が消去されても次回起動時に自動復元
 - **管理画面 & システムトレイ常駐**: ガジェットの追加・表示切替・位置サイズ調整・各種詳細設定（`DD.config` フォーム自動生成含む）・削除、外部サービス接続（SaaS 連携）の一覧・追加（送信先明示＋`credential_schema` 動的フォーム）・トークン差し替え・削除・接続テスト、Windows 起動時の自動起動（`--silent`）トグル
 - **NSIS インストーラ対応**: 日本語・英語に対応した Per-user インストーラおよびポータブル ZIP 配布に対応
+- **ローカル HTML ブリッジ & 外部サービス連携・複製可能ウィジェット（Phase 4）**: ローカルウィジェット向け `window.DD` ブリッジ（`DD.config` / `DD.openUrl` 等）、宣言的コネクタエンジン（`connectors/*.json`）＋ Windows 資格情報マネージャーによるトークン保護、管理画面の外部サービス接続管理 UI、公式サンプル「Notion 今日のタスク」（`samples/notion-today.html`）、および `"duplicable": true` 宣言による複製可能ウィジェット＋ `localStorage` 名前空間分離に対応
 
 ## 📥 インストール
 
