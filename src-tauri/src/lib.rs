@@ -705,14 +705,13 @@ async fn duplicate_widget(
 
 #[tauri::command]
 async fn widget_open_new_window(
-    app: AppHandle,
     window: WebviewWindow,
     url: String,
 ) -> Result<(), String> {
-    let Some(widget_id) = window.label().strip_prefix("widget-").map(|s| s.to_string()) else {
+    if !window.label().starts_with("widget-") {
         return Err("forbidden caller window".to_string());
-    };
-    widget::handle_widget_new_window(&app, &widget_id, &url)
+    }
+    widget::handle_widget_new_window(&url)
 }
 
 #[tauri::command]

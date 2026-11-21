@@ -357,72 +357,13 @@ fn build_widget_init_script(
     format!(
         r#"
 (() => {{
-  if (!window.__ddNewWindowHookInstalled) {{
-    window.__ddNewWindowHookInstalled = true;
-    const __ddDispatchNewWindow = (rawUrl) => {{
-      if (!rawUrl || typeof rawUrl !== 'string') return false;
-      let abs = '';
-      try {{
-        abs = new URL(rawUrl, location.href).href;
-      }} catch (_) {{
-        return false;
-      }}
-      if (!/^https?:\/\//i.test(abs)) return false;
-      if (window === window.top) {{
-        if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {{
-          window.__TAURI_INTERNALS__.invoke('widget_open_new_window', {{ url: abs }}).catch(() => {{}});
-          return true;
-        }}
-        return false;
-      }}
-      try {{
-        window.top.postMessage({{ __ddNewWindow: true, url: abs }}, '*');
-        return true;
-      }} catch (_) {{
-        return false;
-      }}
-    }};
-
-    if (window === window.top) {{
-      window.addEventListener('message', (ev) => {{
-        const data = ev && ev.data;
-        if (!data || data.__ddNewWindow !== true || typeof data.url !== 'string') return;
-        __ddDispatchNewWindow(data.url);
-      }});
-    }}
-
-    document.addEventListener('click', (e) => {{
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      let el = e.target;
-      while (el && el.nodeType === 1) {{
-        if (el.tagName === 'A' && el.hasAttribute('href')) {{
-          const target = (el.getAttribute('target') || '').trim().toLowerCase();
-          if (target === '_blank') {{
-            if (__ddDispatchNewWindow(el.getAttribute('href'))) {{
-              e.preventDefault();
-            }}
-          }}
-          return;
-        }}
-        el = el.parentElement;
-      }}
-    }}, false);
-
-    const __ddOrigWindowOpen = window.open;
-    window.open = function(url, target, features) {{
-      if (typeof url === 'string' && __ddDispatchNewWindow(url)) {{
-        return null;
-      }}
-      return __ddOrigWindowOpen ? __ddOrigWindowOpen.apply(this, arguments) : null;
-    }};
-  }}
-
   if (window !== window.top) return;
   if (window.__ddRuntimeInstalled) return;
   window.__ddRuntimeInstalled = true;
 
   const HOME_URL = {home_json};
   let isLocked = {locked_str};
+  window.__ddGetLocked = () => isLocked;
   let currentCustomCss = {css_json};
   let lastInteractionAt = 0;
   let pendingReloadTimer = null;
@@ -587,6 +528,141 @@ fn build_widget_init_script(
     )
 }
 
+/// 全フレーム（トップフレームおよび `<iframe>` サブフレーム）へ注入するリンククリック／`window.open` 捕捉スクリプトを生成する。
+///
+/// - 通常時（ホーム画面上およびロック中）は `a` 要素クリック（`_self` / `_blank` 等すべて）および `window.open` を
+///   ロック状態によらず既定ブラウザ（`widget_open_new_window`）で開く。
+/// - ロック解除中かつトップフレームが初期 `HOME_URL` と別オリジンへ遷移している間（OAuth 等の認証フロー中）は
+///   捕捉をスキップし、ウィジェット内遷移およびアプリ内ポップアップでログインを完結させる。
+/// - `window.DD` や `localStorage` シムとは分離し、サブフレームへ特権 API を露出させない。
+pub(crate) fn build_link_intercept_script(
+    home_url: &str,
+    locked: bool,
+    is_file_widget: bool,
+) -> String {
+    let home_origin = url::Url::parse(home_url)
+        .ok()
+        .map(|u| u.origin().ascii_serialization())
+        .filter(|o| o != "null")
+        .unwrap_or_default();
+    let home_origin_json = serde_json::to_string(&home_origin).unwrap_or_else(|_| "\"\"".to_string());
+    let locked_str = if locked { "true" } else { "false" };
+    let is_file_str = if is_file_widget { "true" } else { "false" };
+
+    format!(
+        r#"
+(() => {{
+  if (window.__ddLinkInterceptInstalled) return;
+  window.__ddLinkInterceptInstalled = true;
+
+  const HOME_ORIGIN = {home_origin_json};
+  const INITIAL_LOCKED = {locked_str};
+  const IS_FILE_WIDGET = {is_file_str};
+
+  const isTopAuthFlow = () => {{
+    try {{
+      if (window === window.top) {{
+        const lockedNow =
+          typeof window.__ddGetLocked === 'function' ? !!window.__ddGetLocked() : INITIAL_LOCKED;
+        return !lockedNow && !!HOME_ORIGIN && location.origin !== HOME_ORIGIN;
+      }}
+      if (window.top && typeof window.top.__ddIsAuthFlow === 'function') {{
+        return !!window.top.__ddIsAuthFlow();
+      }}
+    }} catch (_) {{}}
+    return false;
+  }};
+
+  if (window === window.top) {{
+    window.__ddIsAuthFlow = isTopAuthFlow;
+  }}
+
+  const resolveExternalHttpUrl = (rawUrl) => {{
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+    const trimmed = rawUrl.trim();
+    if (!trimmed || trimmed.startsWith('#')) return null;
+    let parsed = null;
+    try {{
+      parsed = new URL(trimmed, location.href);
+    }} catch (_) {{
+      return null;
+    }}
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (IS_FILE_WIDGET && parsed.origin === 'http://widgetfile.localhost') return null;
+    if (
+      parsed.origin === location.origin &&
+      parsed.pathname === location.pathname &&
+      parsed.search === location.search &&
+      parsed.hash
+    ) {{
+      return null;
+    }}
+    return parsed.href;
+  }};
+
+  const dispatchExternalOpen = (absUrl) => {{
+    if (!absUrl || typeof absUrl !== 'string') return false;
+    if (window === window.top) {{
+      if (isTopAuthFlow()) return false;
+      if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {{
+        window.__TAURI_INTERNALS__.invoke('widget_open_new_window', {{ url: absUrl }}).catch(() => {{}});
+        return true;
+      }}
+      return false;
+    }}
+    try {{
+      window.top.postMessage({{ __ddOpenExternal: true, url: absUrl }}, '*');
+      return true;
+    }} catch (_) {{
+      return false;
+    }}
+  }};
+
+  if (window === window.top) {{
+    window.addEventListener('message', (ev) => {{
+      const data = ev && ev.data;
+      if (!data || data.__ddOpenExternal !== true || typeof data.url !== 'string') return;
+      if (isTopAuthFlow()) return;
+      if (!/^https?:\/\//i.test(data.url)) return;
+      if (IS_FILE_WIDGET && data.url.startsWith('http://widgetfile.localhost/')) return;
+      dispatchExternalOpen(data.url);
+    }});
+  }}
+
+  document.addEventListener('click', (e) => {{
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {{
+      return;
+    }}
+    if (isTopAuthFlow()) return;
+    let el = e.target;
+    while (el && el.nodeType === 1) {{
+      if (el.tagName === 'A' && el.hasAttribute('href')) {{
+        if (el.hasAttribute('download')) return;
+        const absUrl = resolveExternalHttpUrl(el.getAttribute('href'));
+        if (absUrl && dispatchExternalOpen(absUrl)) {{
+          e.preventDefault();
+        }}
+        return;
+      }}
+      el = el.parentElement;
+    }}
+  }}, false);
+
+  const origWindowOpen = window.open;
+  window.open = function(url, target, features) {{
+    if (!isTopAuthFlow() && typeof url === 'string') {{
+      const absUrl = resolveExternalHttpUrl(url);
+      if (absUrl && dispatchExternalOpen(absUrl)) {{
+        return null;
+      }}
+    }}
+    return origWindowOpen ? origWindowOpen.apply(this, arguments) : null;
+  }};
+}})();
+"#
+    )
+}
+
 /// 独立した WebView2 `user_data_dir` を解決する（他アプリとのロック競合防止）。
 pub fn resolve_webview_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
@@ -714,56 +790,20 @@ fn create_in_app_popup_window(
         .map_err(|e| format!("failed to build popup window {label}: {e}"))
 }
 
-fn create_in_app_popup_window_with_url(
-    app: &AppHandle,
-    url: url::Url,
-) -> Result<tauri::WebviewWindow, String> {
-    let label = format!(
-        "popup-{}",
-        POPUP_WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst)
-    );
-    let data_dir = resolve_webview_data_dir(app)?;
-    let title = url.as_str().to_string();
-
-    WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
-        .data_directory(data_dir)
-        .inner_size(960.0, 720.0)
-        .title(title)
-        .decorations(true)
-        .resizable(true)
-        .skip_taskbar(false)
-        .always_on_bottom(false)
-        .visible(true)
-        .focused(true)
-        .on_document_title_changed(|win, title| {
-            if !title.trim().is_empty() {
-                let _ = win.set_title(&title);
-            }
-        })
-        .on_navigation(is_popup_navigation_allowed)
-        .build()
-        .map_err(|e| format!("failed to build popup window {label}: {e}"))
+/// クリック／`window.open` 経由で外部ブラウザに開く対象 URL（`http` / `https` のみ許可）を検証する。
+pub fn validate_external_click_url(raw_url: &str) -> Result<url::Url, String> {
+    let parsed = url::Url::parse(raw_url).map_err(|e| format!("invalid url: {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("disallowed url scheme".to_string());
+    }
+    Ok(parsed)
 }
 
-/// JS 側の `target="_blank"` / `window.open` 捕捉から呼ばれた新規ウィンドウ要求を処理する。
-pub fn handle_widget_new_window(
-    app: &AppHandle,
-    widget_id: &str,
-    raw_url: &str,
-) -> Result<(), String> {
-    let parsed = url::Url::parse(raw_url).map_err(|e| format!("invalid url: {e}"))?;
-    let locked = is_widget_locked(app, widget_id);
-    match decide_new_window_action(&parsed, locked) {
-        NewWindowAction::AllowInAppPopup => {
-            create_in_app_popup_window_with_url(app, parsed)?;
-            Ok(())
-        }
-        NewWindowAction::OpenInExternalBrowser => {
-            tauri_plugin_opener::open_url(parsed.as_str(), None::<&str>)
-                .map_err(|e| format!("failed to open external url: {e}"))
-        }
-        NewWindowAction::Deny => Err("disallowed url scheme".to_string()),
-    }
+/// JS 側の `<a>` クリック／`window.open` 捕捉から呼ばれた遷移要求を処理する（ロック状態によらず常に既定ブラウザ）。
+pub fn handle_widget_new_window(raw_url: &str) -> Result<(), String> {
+    let parsed = validate_external_click_url(raw_url)?;
+    tauri_plugin_opener::open_url(parsed.as_str(), None::<&str>)
+        .map_err(|e| format!("failed to open external url: {e}"))
 }
 
 fn is_widget_locked(app: &AppHandle, widget_id: &str) -> bool {
@@ -873,6 +913,8 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
         allow_legacy_local_storage,
         duplicable,
     );
+    let link_intercept_script =
+        build_link_intercept_script(&home_url_str, widget.locked, inject_dd_bridge);
 
     let mut builder = WebviewWindowBuilder::new(&app, &label, webview_url)
         .title(&widget.title)
@@ -885,6 +927,7 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
         .skip_taskbar(true)
         .always_on_bottom(true)
         .initialization_script(&init_script)
+        .initialization_script_for_all_frames(&link_intercept_script)
         .on_page_load({
             let widget_id = widget.id.clone();
             move |win, payload| {
@@ -1323,9 +1366,8 @@ mod tests {
             false,
         );
         assert!(url_script.contains("if (window !== window.top) return;"));
-        assert!(url_script.contains("__ddNewWindowHookInstalled"));
-        assert!(url_script.contains("widget_open_new_window"));
-        assert!(url_script.contains("window.top.postMessage"));
+        assert!(url_script.contains("window.__ddGetLocked = () => isLocked;"));
+        assert!(!url_script.contains("__ddLinkInterceptInstalled"));
         assert!(!url_script.contains("Object.defineProperty(window, 'DD'"));
         assert!(!url_script.contains("dd_storage_get"));
         assert!(!url_script.contains("dd_storage_set"));
@@ -1424,5 +1466,50 @@ mod tests {
         assert!(is_popup_navigation_allowed(&oauth_redirect));
         assert!(is_popup_navigation_allowed(&url::Url::parse("about:blank").unwrap()));
         assert!(!is_popup_navigation_allowed(&custom_scheme));
+    }
+
+    #[test]
+    fn link_intercept_script_covers_all_anchors_auth_guard_and_file_widgets() {
+        let url_intercept =
+            build_link_intercept_script("https://muse.ai/library/artifacts/sample", false, false);
+        assert!(url_intercept.contains(r#"const HOME_ORIGIN = "https://muse.ai";"#));
+        assert!(url_intercept.contains("const INITIAL_LOCKED = false;"));
+        assert!(url_intercept.contains("const IS_FILE_WIDGET = false;"));
+        assert!(url_intercept.contains("__ddLinkInterceptInstalled"));
+        assert!(url_intercept.contains("isTopAuthFlow"));
+        assert!(url_intercept.contains("__ddOpenExternal"));
+        assert!(url_intercept.contains("widget_open_new_window"));
+        assert!(url_intercept.contains("el.tagName === 'A'"));
+        assert!(url_intercept.contains("el.hasAttribute('download')"));
+        assert!(url_intercept.contains("window.open"));
+        assert!(!url_intercept.contains("target === '_blank'"));
+        assert!(!url_intercept.contains("Object.defineProperty(window, 'DD'"));
+
+        let file_intercept =
+            build_link_intercept_script("http://widgetfile.localhost/w-file-1/", true, true);
+        assert!(file_intercept.contains(r#"const HOME_ORIGIN = "http://widgetfile.localhost";"#));
+        assert!(file_intercept.contains("const INITIAL_LOCKED = true;"));
+        assert!(file_intercept.contains("const IS_FILE_WIDGET = true;"));
+        assert!(!file_intercept.contains("Object.defineProperty(window, 'DD'"));
+    }
+
+    #[test]
+    fn validate_external_click_url_allows_only_http_https() {
+        assert_eq!(
+            validate_external_click_url("https://example.com/path?a=1")
+                .unwrap()
+                .as_str(),
+            "https://example.com/path?a=1"
+        );
+        assert_eq!(
+            validate_external_click_url("http://127.0.0.1:8080/test")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:8080/test"
+        );
+        assert!(validate_external_click_url("javascript:alert(1)").is_err());
+        assert!(validate_external_click_url("file:///C:/Windows/win.ini").is_err());
+        assert!(validate_external_click_url("mailto:user@example.com").is_err());
+        assert!(validate_external_click_url("not a url").is_err());
     }
 }
