@@ -1,6 +1,6 @@
 # DesktopDashboards
 
-[![Release](https://img.shields.io/badge/version-v0.2.0-blue.svg)](https://github.com/mowthow-works/DesktopDashboards/releases)
+[![Release](https://img.shields.io/badge/version-v0.2.1-blue.svg)](https://github.com/mowthow-works/DesktopDashboards/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://www.microsoft.com/windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
