@@ -507,6 +507,12 @@
           "markdownDescription": "Enables the widget_bar_action command without any pre-configured scope."
         },
         {
+          "description": "Enables the widget_open_new_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-widget-open-new-window",
+          "markdownDescription": "Enables the widget_open_new_window command without any pre-configured scope."
+        },
+        {
           "description": "Denies the add_widget command without any pre-configured scope.",
           "type": "string",
           "const": "deny-add-widget",
@@ -667,6 +673,12 @@
           "type": "string",
           "const": "deny-widget-bar-action",
           "markdownDescription": "Denies the widget_bar_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the widget_open_new_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-widget-open-new-window",
+          "markdownDescription": "Denies the widget_open_new_window command without any pre-configured scope."
         },
         {
           "description": "This permission set configures if your\napplication can enable or disable auto\nstarting the application on boot.\n\n#### Granted Permissions\n\nIt allows all to check, enable and\ndisable the automatic start on boot.\n\n\n#### This default permission set includes:\n\n- `allow-enable`\n- `allow-disable`\n- `allow-is-enabled`",

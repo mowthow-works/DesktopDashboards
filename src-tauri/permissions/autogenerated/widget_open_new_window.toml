@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-widget-open-new-window"
+description = "Enables the widget_open_new_window command without any pre-configured scope."
+commands.allow = ["widget_open_new_window"]
+
+[[permission]]
+identifier = "deny-widget-open-new-window"
+description = "Denies the widget_open_new_window command without any pre-configured scope."
+commands.deny = ["widget_open_new_window"]

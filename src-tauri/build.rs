@@ -35,6 +35,7 @@ fn main() {
                 "update_widget_bounds",
                 "update_widget_settings",
                 "widget_bar_action",
+                "widget_open_new_window",
                 "reset_widget_position",
                 "delete_widget",
                 "reload_widget",

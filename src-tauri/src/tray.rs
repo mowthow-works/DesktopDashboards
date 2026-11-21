@@ -1,3 +1,4 @@
+use crate::autostart;
 use crate::config::ConfigState;
 use crate::widget;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -5,7 +6,6 @@ use std::sync::Arc;
 use tauri::menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
-use tauri_plugin_autostart::ManagerExt;
 
 const TRAY_ID: &str = "main-tray";
 
@@ -19,14 +19,14 @@ pub fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let open_item = MenuItemBuilder::with_id("open_manager", "管理画面を開く").build(app)?;
     builder = builder.item(&open_item).separator();
 
-    let (widgets, autostart_cfg) = if let Some(state) = app.try_state::<Arc<ConfigState>>() {
+    let widgets = if let Some(state) = app.try_state::<Arc<ConfigState>>() {
         if let Ok(cfg) = state.config.lock() {
-            (cfg.widgets.clone(), cfg.autostart)
+            cfg.widgets.clone()
         } else {
-            (Vec::new(), false)
+            Vec::new()
         }
     } else {
-        (Vec::new(), false)
+        Vec::new()
     };
 
     if widgets.is_empty() {
@@ -43,10 +43,7 @@ pub fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         }
     }
 
-    let autostart_enabled = app
-        .autolaunch()
-        .is_enabled()
-        .unwrap_or(autostart_cfg);
+    let autostart_enabled = autostart::get_cached_autostart();
 
     let lock_all_item = MenuItemBuilder::with_id("lock_all", "すべてロック").build(app)?;
     let unlock_all_item =
@@ -106,25 +103,26 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
             } else if id == "reload_all" {
                 widget::reload_all_widget_windows(app);
             } else if id == "autostart" {
-                let current = app.autolaunch().is_enabled().unwrap_or(false);
-                let next = !current;
-                let res = if next {
-                    app.autolaunch().enable()
-                } else {
-                    app.autolaunch().disable()
-                };
-                if let Err(e) = res {
-                    eprintln!("[tray] autostart toggle failed: {e}");
-                } else {
-                    if let Some(state) = app.try_state::<Arc<ConfigState>>() {
-                        if let Ok(mut cfg) = state.config.lock() {
-                            cfg.autostart = next;
-                        }
-                        let _ = state.save_now();
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let app_for_query = app_handle.clone();
+                    let current = tauri::async_runtime::spawn_blocking(move || {
+                        autostart::query_os_autostart_state_blocking(&app_for_query)
+                            .map(|s| s.is_enabled())
+                    })
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .unwrap_or_else(autostart::get_cached_autostart);
+                    let next = !current;
+                    if let Err(e) = autostart::apply_autostart_toggle(&app_handle, next).await {
+                        eprintln!("[tray] autostart toggle failed: {e}");
+                        autostart::set_cached_autostart(current);
+                        refresh_tray_menu(&app_handle);
+                    } else {
+                        let _ = app_handle.emit("widgets-updated", ());
                     }
-                    let _ = app.emit("widgets-updated", ());
-                }
-                refresh_tray_menu(app);
+                });
             } else if id == "quit" {
                 if let Some(flag) = app.try_state::<AppQuitFlag>() {
                     flag.0.store(true, Ordering::SeqCst);

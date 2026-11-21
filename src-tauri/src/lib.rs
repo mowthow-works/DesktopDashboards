@@ -1,3 +1,4 @@
+mod autostart;
 mod cli;
 mod config;
 mod dd_bridge;
@@ -12,7 +13,7 @@ use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, RunEvent, Size,
     WebviewWindow, WindowEvent,
 };
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_autostart::MacosLauncher;
 use tray::AppQuitFlag;
 
 /// 管理画面ウィンドウを前面表示する。
@@ -703,6 +704,18 @@ async fn duplicate_widget(
 }
 
 #[tauri::command]
+async fn widget_open_new_window(
+    app: AppHandle,
+    window: WebviewWindow,
+    url: String,
+) -> Result<(), String> {
+    let Some(widget_id) = window.label().strip_prefix("widget-").map(|s| s.to_string()) else {
+        return Err("forbidden caller window".to_string());
+    };
+    widget::handle_widget_new_window(&app, &widget_id, &url)
+}
+
+#[tauri::command]
 async fn widget_bar_action(
     app: AppHandle,
     window: WebviewWindow,
@@ -852,69 +865,21 @@ fn reload_all_widgets(app: AppHandle) {
 }
 
 #[tauri::command]
-fn get_autostart(app: AppHandle) -> Result<bool, String> {
-    app.autolaunch()
-        .is_enabled()
-        .map_err(|e| format!("failed to query autostart: {e}"))
-}
-
-#[tauri::command]
-fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
-    if enabled {
-        app.autolaunch()
-            .enable()
-            .map_err(|e| format!("failed to enable autostart: {e}"))?;
-    } else {
-        app.autolaunch()
-            .disable()
-            .map_err(|e| format!("failed to disable autostart: {e}"))?;
-    }
-
-    if let Some(state) = app.try_state::<Arc<ConfigState>>() {
-        if let Ok(mut cfg) = state.config.lock() {
-            cfg.autostart = enabled;
-        }
-        let _ = state.save_now();
-    }
-    tray::refresh_tray_menu(&app);
+async fn get_autostart(app: AppHandle) -> Result<bool, String> {
+    let app_for_query = app.clone();
+    let state = tauri::async_runtime::spawn_blocking(move || {
+        autostart::query_os_autostart_state_blocking(&app_for_query)
+    })
+    .await
+    .map_err(|e| format!("autostart query join error: {e}"))??;
+    let enabled = state.is_enabled();
+    autostart::set_cached_autostart(enabled);
     Ok(enabled)
 }
 
-/// `config.json` の自動起動設定と OS 側スタートアップ登録状態の差分を判定する。
-/// 戻り値は `(OS側へ自動起動を再登録するか, config.json側をtrueへ同期保存するか)`。
-pub fn plan_autostart_sync(config_autostart: bool, os_enabled: bool) -> (bool, bool) {
-    match (config_autostart, os_enabled) {
-        (true, false) => (true, false),
-        (false, true) => (false, true),
-        _ => (false, false),
-    }
-}
-
-/// 起動時に自動起動設定を照合し、インストーラ上書き更新等で OS 側登録が消えていた場合は自動復元する。
-fn sync_autostart_on_startup(app: &AppHandle, state: &Arc<ConfigState>) {
-    let config_autostart = state
-        .config
-        .lock()
-        .map(|cfg| cfg.autostart)
-        .unwrap_or(false);
-    let autolaunch = app.autolaunch();
-    let os_enabled = autolaunch.is_enabled().unwrap_or(false);
-
-    let (should_enable_os, should_save_config_true) =
-        plan_autostart_sync(config_autostart, os_enabled);
-
-    if should_enable_os {
-        if let Err(e) = autolaunch.enable() {
-            eprintln!("[autostart] failed to restore OS autostart: {e}");
-        }
-    }
-
-    if should_save_config_true {
-        if let Ok(mut cfg) = state.config.lock() {
-            cfg.autostart = true;
-        }
-        let _ = state.save_now();
-    }
+#[tauri::command]
+async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    autostart::apply_autostart_toggle(&app, enabled).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -941,7 +906,10 @@ pub fn run() {
                 ConfigState::load_or_init(app.handle())
                     .expect("failed to initialize ConfigState"),
             );
-            sync_autostart_on_startup(app.handle(), &config_state);
+            autostart::spawn_sync_autostart_on_startup(
+                app.handle().clone(),
+                Arc::clone(&config_state),
+            );
             app.manage(config_state);
 
             if let Err(e) = dd_bridge::migrate_and_ensure_connections_for_app(app.handle()) {
@@ -982,6 +950,7 @@ pub fn run() {
             update_widget_bounds,
             update_widget_settings,
             widget_bar_action,
+            widget_open_new_window,
             reset_widget_position,
             delete_widget,
             reload_widget,
@@ -1070,14 +1039,6 @@ mod tests {
             strip_windows_verbatim_prefix(verbatim),
             r"C:\Program Files\DesktopDashboards\samples"
         );
-    }
-
-    #[test]
-    fn test_plan_autostart_sync() {
-        assert_eq!(plan_autostart_sync(true, false), (true, false));
-        assert_eq!(plan_autostart_sync(false, true), (false, true));
-        assert_eq!(plan_autostart_sync(true, true), (false, false));
-        assert_eq!(plan_autostart_sync(false, false), (false, false));
     }
 
     #[test]

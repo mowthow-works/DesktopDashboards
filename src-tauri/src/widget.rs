@@ -3,9 +3,10 @@ use crate::win32;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::webview::{NewWindowResponse, PageLoadEvent};
+use tauri::webview::{NewWindowFeatures, NewWindowResponse, PageLoadEvent};
 use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
@@ -356,6 +357,66 @@ fn build_widget_init_script(
     format!(
         r#"
 (() => {{
+  if (!window.__ddNewWindowHookInstalled) {{
+    window.__ddNewWindowHookInstalled = true;
+    const __ddDispatchNewWindow = (rawUrl) => {{
+      if (!rawUrl || typeof rawUrl !== 'string') return false;
+      let abs = '';
+      try {{
+        abs = new URL(rawUrl, location.href).href;
+      }} catch (_) {{
+        return false;
+      }}
+      if (!/^https?:\/\//i.test(abs)) return false;
+      if (window === window.top) {{
+        if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {{
+          window.__TAURI_INTERNALS__.invoke('widget_open_new_window', {{ url: abs }}).catch(() => {{}});
+          return true;
+        }}
+        return false;
+      }}
+      try {{
+        window.top.postMessage({{ __ddNewWindow: true, url: abs }}, '*');
+        return true;
+      }} catch (_) {{
+        return false;
+      }}
+    }};
+
+    if (window === window.top) {{
+      window.addEventListener('message', (ev) => {{
+        const data = ev && ev.data;
+        if (!data || data.__ddNewWindow !== true || typeof data.url !== 'string') return;
+        __ddDispatchNewWindow(data.url);
+      }});
+    }}
+
+    document.addEventListener('click', (e) => {{
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      let el = e.target;
+      while (el && el.nodeType === 1) {{
+        if (el.tagName === 'A' && el.hasAttribute('href')) {{
+          const target = (el.getAttribute('target') || '').trim().toLowerCase();
+          if (target === '_blank') {{
+            if (__ddDispatchNewWindow(el.getAttribute('href'))) {{
+              e.preventDefault();
+            }}
+          }}
+          return;
+        }}
+        el = el.parentElement;
+      }}
+    }}, false);
+
+    const __ddOrigWindowOpen = window.open;
+    window.open = function(url, target, features) {{
+      if (typeof url === 'string' && __ddDispatchNewWindow(url)) {{
+        return null;
+      }}
+      return __ddOrigWindowOpen ? __ddOrigWindowOpen.apply(this, arguments) : null;
+    }};
+  }}
+
   if (window !== window.top) return;
   if (window.__ddRuntimeInstalled) return;
   window.__ddRuntimeInstalled = true;
@@ -564,6 +625,160 @@ pub fn is_same_origin_or_internal(initial: &url::Url, target: &url::Url) -> bool
         && initial.port_or_known_default() == target.port_or_known_default()
 }
 
+/// ナビゲーション遷移の判定結果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavigationAction {
+    AllowInWidget,
+    OpenInExternalBrowser,
+    Block,
+}
+
+/// 新規ウィンドウ要求の判定結果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewWindowAction {
+    AllowInAppPopup,
+    OpenInExternalBrowser,
+    Deny,
+}
+
+/// ウィジェットのロック状態に応じたナビゲーション動作を判定する。
+pub fn decide_navigation_action(
+    initial_url: &url::Url,
+    target_url: &url::Url,
+    locked: bool,
+) -> NavigationAction {
+    if is_same_origin_or_internal(initial_url, target_url) {
+        NavigationAction::AllowInWidget
+    } else if matches!(target_url.scheme(), "http" | "https") {
+        if locked {
+            NavigationAction::OpenInExternalBrowser
+        } else {
+            NavigationAction::AllowInWidget
+        }
+    } else {
+        NavigationAction::Block
+    }
+}
+
+/// ウィジェットのロック状態に応じた新規ウィンドウ要求の動作を判定する。
+pub fn decide_new_window_action(target_url: &url::Url, locked: bool) -> NewWindowAction {
+    if !matches!(target_url.scheme(), "http" | "https") {
+        return NewWindowAction::Deny;
+    }
+    if locked {
+        NewWindowAction::OpenInExternalBrowser
+    } else {
+        NewWindowAction::AllowInAppPopup
+    }
+}
+
+static POPUP_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+fn is_popup_navigation_allowed(target_url: &url::Url) -> bool {
+    matches!(
+        target_url.scheme(),
+        "http" | "https" | "about" | "data" | "blob"
+    )
+}
+
+fn create_in_app_popup_window(
+    app: &AppHandle,
+    url: &url::Url,
+    features: NewWindowFeatures,
+) -> Result<tauri::WebviewWindow, String> {
+    let label = format!(
+        "popup-{}",
+        POPUP_WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst)
+    );
+    let blank_url: url::Url = "about:blank"
+        .parse()
+        .map_err(|e| format!("invalid about:blank url: {e}"))?;
+
+    WebviewWindowBuilder::new(app, &label, WebviewUrl::External(blank_url))
+        .inner_size(900.0, 720.0)
+        .window_features(features)
+        .title(url.as_str())
+        .decorations(true)
+        .resizable(true)
+        .skip_taskbar(false)
+        .always_on_bottom(false)
+        .visible(true)
+        .focused(true)
+        .on_document_title_changed(|win, title| {
+            if !title.trim().is_empty() {
+                let _ = win.set_title(&title);
+            }
+        })
+        .on_navigation(is_popup_navigation_allowed)
+        .build()
+        .map_err(|e| format!("failed to build popup window {label}: {e}"))
+}
+
+fn create_in_app_popup_window_with_url(
+    app: &AppHandle,
+    url: url::Url,
+) -> Result<tauri::WebviewWindow, String> {
+    let label = format!(
+        "popup-{}",
+        POPUP_WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst)
+    );
+    let data_dir = resolve_webview_data_dir(app)?;
+    let title = url.as_str().to_string();
+
+    WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
+        .data_directory(data_dir)
+        .inner_size(960.0, 720.0)
+        .title(title)
+        .decorations(true)
+        .resizable(true)
+        .skip_taskbar(false)
+        .always_on_bottom(false)
+        .visible(true)
+        .focused(true)
+        .on_document_title_changed(|win, title| {
+            if !title.trim().is_empty() {
+                let _ = win.set_title(&title);
+            }
+        })
+        .on_navigation(is_popup_navigation_allowed)
+        .build()
+        .map_err(|e| format!("failed to build popup window {label}: {e}"))
+}
+
+/// JS 側の `target="_blank"` / `window.open` 捕捉から呼ばれた新規ウィンドウ要求を処理する。
+pub fn handle_widget_new_window(
+    app: &AppHandle,
+    widget_id: &str,
+    raw_url: &str,
+) -> Result<(), String> {
+    let parsed = url::Url::parse(raw_url).map_err(|e| format!("invalid url: {e}"))?;
+    let locked = is_widget_locked(app, widget_id);
+    match decide_new_window_action(&parsed, locked) {
+        NewWindowAction::AllowInAppPopup => {
+            create_in_app_popup_window_with_url(app, parsed)?;
+            Ok(())
+        }
+        NewWindowAction::OpenInExternalBrowser => {
+            tauri_plugin_opener::open_url(parsed.as_str(), None::<&str>)
+                .map_err(|e| format!("failed to open external url: {e}"))
+        }
+        NewWindowAction::Deny => Err("disallowed url scheme".to_string()),
+    }
+}
+
+fn is_widget_locked(app: &AppHandle, widget_id: &str) -> bool {
+    app.try_state::<Arc<ConfigState>>()
+        .and_then(|state| {
+            state.config.lock().ok().and_then(|cfg| {
+                cfg.widgets
+                    .iter()
+                    .find(|w| w.id == widget_id)
+                    .map(|w| w.locked)
+            })
+        })
+        .unwrap_or(true)
+}
+
 /// ガジェット設定に応じて配置モード（モードA: 最背面固定 / モードB: WorkerW 壁紙埋め込み）を適用する。
 pub fn apply_placement_mode(window: &tauri::WebviewWindow, widget: &WidgetConfig) {
     let w = widget.width.max(120);
@@ -694,22 +909,57 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
                 }
             }
         })
-        .on_new_window(|url, _features| {
-            if matches!(url.scheme(), "http" | "https") {
-                let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>);
+        .on_new_window({
+            let app_handle = app.clone();
+            let widget_id = widget.id.clone();
+            move |url, features| {
+                let locked = is_widget_locked(&app_handle, &widget_id);
+                let action = decide_new_window_action(&url, locked);
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[widget:{widget_id}] on_new_window url={url} locked={locked} action={action:?}"
+                );
+                match action {
+                    NewWindowAction::AllowInAppPopup => {
+                        match create_in_app_popup_window(&app_handle, &url, features) {
+                            Ok(window) => NewWindowResponse::Create { window },
+                            Err(e) => {
+                                eprintln!("[widget:{widget_id}] {e}");
+                                NewWindowResponse::Allow
+                            }
+                        }
+                    }
+                    NewWindowAction::OpenInExternalBrowser => {
+                        if let Err(e) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
+                            eprintln!("[widget:{widget_id}] open_url failed on new_window: {e}");
+                        }
+                        NewWindowResponse::Deny
+                    }
+                    NewWindowAction::Deny => NewWindowResponse::Deny,
+                }
             }
-            NewWindowResponse::Deny
         });
 
     if let Some(base_url) = initial_url {
+        let app_handle = app.clone();
+        let widget_id = widget.id.clone();
         builder = builder.on_navigation(move |target_url| {
-            if is_same_origin_or_internal(&base_url, target_url) {
-                true
-            } else {
-                if matches!(target_url.scheme(), "http" | "https") {
-                    let _ = tauri_plugin_opener::open_url(target_url.as_str(), None::<&str>);
+            let locked = is_widget_locked(&app_handle, &widget_id);
+            let action = decide_navigation_action(&base_url, target_url, locked);
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "[widget:{widget_id}] on_navigation target={target_url} locked={locked} action={action:?}"
+            );
+            match action {
+                NavigationAction::AllowInWidget => true,
+                NavigationAction::OpenInExternalBrowser => {
+                    if let Err(e) = tauri_plugin_opener::open_url(target_url.as_str(), None::<&str>)
+                    {
+                        eprintln!("[widget:{widget_id}] open_url failed on navigation: {e}");
+                    }
+                    false
                 }
-                false
+                NavigationAction::Block => false,
             }
         });
     }
@@ -1073,6 +1323,9 @@ mod tests {
             false,
         );
         assert!(url_script.contains("if (window !== window.top) return;"));
+        assert!(url_script.contains("__ddNewWindowHookInstalled"));
+        assert!(url_script.contains("widget_open_new_window"));
+        assert!(url_script.contains("window.top.postMessage"));
         assert!(!url_script.contains("Object.defineProperty(window, 'DD'"));
         assert!(!url_script.contains("dd_storage_get"));
         assert!(!url_script.contains("dd_storage_set"));
@@ -1115,5 +1368,61 @@ mod tests {
         assert!(isolated_non_dup.contains("const ALLOW_LEGACY_FALLBACK = false;"));
         assert!(isolated_non_dup.contains("__ddLocalStorageShimmed"));
         assert!(!isolated_non_dup.contains("invokeAction('duplicate')"));
+    }
+
+    #[test]
+    fn navigation_and_new_window_respect_lock_state() {
+        let base = url::Url::parse("https://muse.ai/library/artifacts/sample").unwrap();
+        let same_origin = url::Url::parse("https://muse.ai/dashboard").unwrap();
+        let oauth_redirect = url::Url::parse("https://accounts.google.com/o/oauth2/v2/auth").unwrap();
+        let custom_scheme = url::Url::parse("mailto:test@example.com").unwrap();
+
+        // ロック中：同一オリジンのみ許可、別オリジン http/https は外部ブラウザへ
+        assert_eq!(
+            decide_navigation_action(&base, &same_origin, true),
+            NavigationAction::AllowInWidget
+        );
+        assert_eq!(
+            decide_navigation_action(&base, &oauth_redirect, true),
+            NavigationAction::OpenInExternalBrowser
+        );
+        assert_eq!(
+            decide_navigation_action(&base, &custom_scheme, true),
+            NavigationAction::Block
+        );
+        assert_eq!(
+            decide_new_window_action(&oauth_redirect, true),
+            NewWindowAction::OpenInExternalBrowser
+        );
+        assert_eq!(
+            decide_new_window_action(&custom_scheme, true),
+            NewWindowAction::Deny
+        );
+
+        // ロック解除中：別オリジン http/https 遷移と新規ウィンドウをウィジェット側で許可
+        assert_eq!(
+            decide_navigation_action(&base, &same_origin, false),
+            NavigationAction::AllowInWidget
+        );
+        assert_eq!(
+            decide_navigation_action(&base, &oauth_redirect, false),
+            NavigationAction::AllowInWidget
+        );
+        assert_eq!(
+            decide_navigation_action(&base, &custom_scheme, false),
+            NavigationAction::Block
+        );
+        assert_eq!(
+            decide_new_window_action(&oauth_redirect, false),
+            NewWindowAction::AllowInAppPopup
+        );
+        assert_eq!(
+            decide_new_window_action(&custom_scheme, false),
+            NewWindowAction::Deny
+        );
+
+        assert!(is_popup_navigation_allowed(&oauth_redirect));
+        assert!(is_popup_navigation_allowed(&url::Url::parse("about:blank").unwrap()));
+        assert!(!is_popup_navigation_allowed(&custom_scheme));
     }
 }
