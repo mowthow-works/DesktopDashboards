@@ -245,18 +245,18 @@
 </head>
 <body>
   <div class="header">
-    <h1>ポモドーロタイマー</h1>
+    <h1 data-i18n="heading">ポモドーロタイマー</h1>
     <div class="header-actions">
       <span class="count-pill" id="today-count">🍅 今日: 0回</span>
-      <button type="button" class="icon-btn" id="btn-mute" title="通知音 ON/OFF">🔔 音ON</button>
+      <button type="button" class="icon-btn" id="btn-mute" data-i18n-title="muteTitle" title="通知音 ON/OFF">🔔 音ON</button>
     </div>
   </div>
 
   <section class="card">
     <div class="mode-tabs" role="tablist">
-      <button type="button" class="mode-tab active" data-mode="focus">集中 25分</button>
-      <button type="button" class="mode-tab" data-mode="short">小休憩 5分</button>
-      <button type="button" class="mode-tab" data-mode="long">長休憩 15分</button>
+      <button type="button" class="mode-tab active" data-mode="focus" data-i18n="tabFocus">集中 25分</button>
+      <button type="button" class="mode-tab" data-mode="short" data-i18n="tabShort">小休憩 5分</button>
+      <button type="button" class="mode-tab" data-mode="long" data-i18n="tabLong">長休憩 15分</button>
     </div>
 
     <div class="ring-wrap">
@@ -268,8 +268,8 @@
         <span class="mode-label" id="mode-label">集中タイム</span>
         <div class="time-display" id="time-display">25:00</div>
         <div class="adjust-row">
-          <button type="button" class="adjust-btn" id="btn-minus">-1分</button>
-          <button type="button" class="adjust-btn" id="btn-plus">+1分</button>
+          <button type="button" class="adjust-btn" id="btn-minus" data-i18n="minusMin">-1分</button>
+          <button type="button" class="adjust-btn" id="btn-plus" data-i18n="plusMin">+1分</button>
         </div>
       </div>
     </div>
@@ -278,22 +278,23 @@
 
     <div class="controls">
       <button type="button" class="btn-primary" id="btn-toggle">開始</button>
-      <button type="button" class="btn-secondary" id="btn-reset">リセット</button>
-      <button type="button" class="btn-secondary" id="btn-skip">スキップ</button>
+      <button type="button" class="btn-secondary" id="btn-reset" data-i18n="resetBtn">リセット</button>
+      <button type="button" class="btn-secondary" id="btn-skip" data-i18n="skipBtn">スキップ</button>
     </div>
 
     <div class="task-box">
-      <label for="current-task">いま集中するタスク（自動保存）</label>
+      <label for="current-task" data-i18n="taskLabel">いま集中するタスク（自動保存）</label>
       <input
         id="current-task"
         type="text"
+        data-i18n-placeholder="taskPlaceholder"
         placeholder="例: 仕様書のレビューを終わらせる"
         autocomplete="off"
       />
     </div>
   </section>
 
-  <div class="hint">
+  <div class="hint" data-i18n="hint">
     「フォーカス非奪取」を ON にすると作業中に残り時間をチラ見しやすくなります。
   </div>
 
@@ -302,10 +303,77 @@
       const STORAGE_KEY = "dd_sample_pomodoro_v1";
       const CIRCUMFERENCE = 2 * Math.PI * 76;
 
+      const I18N = {
+        ja: {
+          heading: "ポモドーロタイマー",
+          muteTitle: "通知音 ON/OFF",
+          tabFocus: "集中 25分",
+          tabShort: "小休憩 5分",
+          tabLong: "長休憩 15分",
+          minusMin: "-1分",
+          plusMin: "+1分",
+          resetBtn: "リセット",
+          skipBtn: "スキップ",
+          taskLabel: "いま集中するタスク（自動保存）",
+          taskPlaceholder: "例: 仕様書のレビューを終わらせる",
+          hint: "「フォーカス非奪取」を ON にすると作業中に残り時間をチラ見しやすくなります。",
+          modes: {
+            focus: "集中タイム",
+            short: "小休憩",
+            long: "長休憩"
+          },
+          startBtn: "開始",
+          pauseBtn: "一時停止",
+          todayCount: (count) => `🍅 今日: ${count}回`,
+          soundOn: "🔔 音ON",
+          soundMuted: "🔇 消音",
+          focusDone: (nextLabel) => `集中完了！${nextLabel}に切り替えました。`,
+          skipToBreak: (nextLabel) => `${nextLabel}にスキップしました。`,
+          breakDone: "休憩終了！次の集中タイムの準備ができました。",
+          skipToFocus: "集中タイムにスキップしました。"
+        },
+        en: {
+          heading: "Pomodoro Timer",
+          muteTitle: "Toggle chime sound",
+          tabFocus: "Focus 25m",
+          tabShort: "Short Break 5m",
+          tabLong: "Long Break 15m",
+          minusMin: "-1m",
+          plusMin: "+1m",
+          resetBtn: "Reset",
+          skipBtn: "Skip",
+          taskLabel: "Current focus task (Auto-saved)",
+          taskPlaceholder: "e.g. Finish reviewing design spec",
+          hint: "Enable \"No Focus\" in Manager to glance at the timer without stealing focus.",
+          modes: {
+            focus: "Focus",
+            short: "Short Break",
+            long: "Long Break"
+          },
+          startBtn: "Start",
+          pauseBtn: "Pause",
+          todayCount: (count) => `🍅 Today: ${count}`,
+          soundOn: "🔔 Sound",
+          soundMuted: "🔇 Muted",
+          focusDone: (nextLabel) => `Focus complete! Switched to ${nextLabel}.`,
+          skipToBreak: (nextLabel) => `Skipped to ${nextLabel}.`,
+          breakDone: "Break finished! Ready for the next Focus session.",
+          skipToFocus: "Skipped to Focus session."
+        }
+      };
+
+      function resolveLang(candidate) {
+        const raw = typeof candidate === "string" && candidate ? candidate : (window.__ddLang || navigator.language || "en");
+        return /^ja\b/i.test(raw) ? "ja" : "en";
+      }
+
+      let currentLang = resolveLang();
+      const L = () => I18N[currentLang] || I18N.en;
+
       const MODES = {
-        focus: { label: "集中タイム", defaultSec: 25 * 60, color: "#3b82f6" },
-        short: { label: "小休憩", defaultSec: 5 * 60, color: "#10b981" },
-        long: { label: "長休憩", defaultSec: 15 * 60, color: "#8b5cf6" }
+        focus: { defaultSec: 25 * 60, color: "#3b82f6" },
+        short: { defaultSec: 5 * 60, color: "#10b981" },
+        long: { defaultSec: 15 * 60, color: "#8b5cf6" }
       };
 
       function getTodayKey() {
@@ -360,6 +428,20 @@
 
       ringProgressEl.style.strokeDasharray = `${CIRCUMFERENCE}`;
 
+      function applyStaticLanguage() {
+        const dict = L();
+        document.documentElement.lang = currentLang;
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          el.textContent = dict[el.dataset.i18n];
+        });
+        document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+          el.placeholder = dict[el.dataset.i18nPlaceholder];
+        });
+        document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+          el.title = dict[el.dataset.i18nTitle];
+        });
+      }
+
       function persist() {
         const today = getTodayKey();
         if (saved.date !== today) {
@@ -406,17 +488,19 @@
       }
 
       function updateUI() {
+        const dict = L();
         const modeInfo = MODES[currentMode];
+        const modeLabel = dict.modes[currentMode];
         document.documentElement.style.setProperty("--active-color", modeInfo.color);
-        modeLabelEl.textContent = modeInfo.label;
+        modeLabelEl.textContent = modeLabel;
         timeDisplayEl.textContent = formatMMSS(remainingSeconds);
-        document.title = `${formatMMSS(remainingSeconds)} - ${modeInfo.label}`;
+        document.title = `${formatMMSS(remainingSeconds)} - ${modeLabel}`;
 
         const ratio = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
         const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, ratio)));
         ringProgressEl.style.strokeDashoffset = `${offset}`;
 
-        toggleBtn.textContent = running ? "一時停止" : "開始";
+        toggleBtn.textContent = running ? dict.pauseBtn : dict.startBtn;
         minusBtn.disabled = running || totalSeconds <= 60;
         plusBtn.disabled = running || totalSeconds >= 90 * 60;
 
@@ -426,8 +510,8 @@
           saved.count = 0;
           persist();
         }
-        todayCountEl.textContent = `🍅 今日: ${saved.count}回`;
-        muteBtn.textContent = saved.muted ? "🔇 消音" : "🔔 音ON";
+        todayCountEl.textContent = dict.todayCount(saved.count);
+        muteBtn.textContent = saved.muted ? dict.soundMuted : dict.soundOn;
 
         modeTabs.forEach((tab) => {
           tab.classList.toggle("active", tab.dataset.mode === currentMode);
@@ -455,6 +539,7 @@
       }
 
       function completeSession(completedNaturally) {
+        const dict = L();
         stopTimer();
         let msg = "";
         if (currentMode === "focus") {
@@ -463,14 +548,11 @@
             persist();
           }
           const nextMode = saved.count > 0 && saved.count % 4 === 0 ? "long" : "short";
-          msg = completedNaturally
-            ? `集中完了！${MODES[nextMode].label}に切り替えました。`
-            : `${MODES[nextMode].label}にスキップしました。`;
+          const nextLabel = dict.modes[nextMode];
+          msg = completedNaturally ? dict.focusDone(nextLabel) : dict.skipToBreak(nextLabel);
           switchMode(nextMode, false);
         } else {
-          msg = completedNaturally
-            ? "休憩終了！次の集中タイムの準備ができました。"
-            : "集中タイムにスキップしました。";
+          msg = completedNaturally ? dict.breakDone : dict.skipToFocus;
           switchMode("focus", false);
         }
         bannerEl.textContent = msg;
@@ -554,6 +636,13 @@
         persist();
       });
 
+      window.addEventListener("dd-language-changed", (ev) => {
+        currentLang = resolveLang(ev?.detail?.lang);
+        applyStaticLanguage();
+        updateUI();
+      });
+
+      applyStaticLanguage();
       updateUI();
     })();
   </script>

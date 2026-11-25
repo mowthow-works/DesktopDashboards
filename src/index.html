@@ -30,6 +30,24 @@
       margin-bottom: 16px;
       gap: 12px;
     }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .lang-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .lang-wrap select {
+      width: auto;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
     h1 {
       font-size: 18px;
       margin: 0;
@@ -471,53 +489,63 @@
 <body>
   <header>
     <h1>DesktopDashboards</h1>
-    <button class="secondary" id="btn-reload-all">すべて再読み込み</button>
+    <div class="header-actions">
+      <label class="lang-wrap" for="language-select">
+        <span data-i18n="langLabel">言語</span>
+        <select id="language-select">
+          <option value="auto" data-i18n="langAuto">自動 (OS設定)</option>
+          <option value="ja" data-i18n="langJa">日本語</option>
+          <option value="en" data-i18n="langEn">English</option>
+        </select>
+      </label>
+      <button class="secondary" id="btn-reload-all" data-i18n="reloadAll">すべて再読み込み</button>
+    </div>
   </header>
 
   <section class="panel">
-    <h2>新規ガジェット追加</h2>
+    <h2 data-i18n="addPanelTitle">新規ガジェット追加</h2>
     <div class="row">
       <div class="field" style="flex: 0 0 130px;">
-        <label class="field-label" for="source-type">種別</label>
+        <label class="field-label" for="source-type" data-i18n="fieldType">種別</label>
         <select id="source-type">
-          <option value="url">Web URL</option>
-          <option value="file">ローカル HTML</option>
+          <option value="url" data-i18n="typeUrl">Web URL</option>
+          <option value="file" data-i18n="typeFile">ローカル HTML</option>
         </select>
       </div>
       <div class="field">
-        <label class="field-label" for="widget-title">タイトル（任意）</label>
-        <input id="widget-title" type="text" placeholder="例: 付箋メモ＆ToDo" />
+        <label class="field-label" for="widget-title" data-i18n="fieldTitleOpt">タイトル（任意）</label>
+        <input id="widget-title" type="text" data-i18n-placeholder="titlePlaceholder" placeholder="例: 付箋メモ＆ToDo" />
       </div>
     </div>
     <div class="row">
       <div class="field">
-        <label class="field-label" for="widget-source">URL または HTML ファイルパス</label>
+        <label class="field-label" for="widget-source" data-i18n="fieldSource">URL または HTML ファイルパス</label>
         <input id="widget-source" type="text" placeholder="https://example.com/..." />
       </div>
-      <button class="secondary" id="btn-browse" style="margin-top: 18px; display: none;">参照...</button>
-      <button class="primary" id="btn-add" style="margin-top: 18px;">追加して表示</button>
+      <button class="secondary" id="btn-browse" style="margin-top: 18px; display: none;" data-i18n="browseBtn">参照...</button>
+      <button class="primary" id="btn-add" style="margin-top: 18px;" data-i18n="addAndShowBtn">追加して表示</button>
     </div>
     <div id="status"></div>
   </section>
 
   <section class="panel">
-    <h2>登録済みガジェット一覧</h2>
+    <h2 data-i18n="registeredPanelTitle">登録済みガジェット一覧</h2>
     <div id="widget-list" class="widget-list"></div>
   </section>
 
   <section class="panel" id="connections-panel">
     <div class="panel-head">
-      <h2>外部サービス接続（SaaS 連携）</h2>
-      <button type="button" class="primary" id="btn-toggle-conn-form">＋ 接続を追加</button>
+      <h2 data-i18n="connPanelTitle">外部サービス接続（SaaS 連携）</h2>
+      <button type="button" class="primary" id="btn-toggle-conn-form" data-i18n="addConnBtn">＋ 接続を追加</button>
     </div>
 
     <details class="guide-details">
-      <summary>📖 Notion 連携の設定手順（4ステップ）</summary>
+      <summary data-i18n="notionGuideSummary">📖 Notion 連携の設定手順（4ステップ）</summary>
       <ol class="guide-steps">
-        <li><code>https://app.notion.com/developers/connections</code> で <strong>+ New connection</strong> → <strong>名前を入力</strong>（空欄だと Create ボタン無効）→ Authentication method で <strong>API token</strong>（旧 Internal Integration 相当）を選んで <strong>Create connection</strong></li>
-        <li>Capabilities で <strong>Read content</strong> に加え、チェック書き戻しを行う場合は <strong>Update content</strong> を確認し、発行されたトークン（<code>ntn_...</code>）を下の「＋ 接続を追加」から保存（送信先 <code>api.notion.com</code>、Windows 資格情報マネージャー保管）</li>
-        <li>Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト (Connections)</code> からコネクトを追加、または開発者コンソールの <code>Content access</code> タブから親ページを選択して共有（※未共有だと <code>object_not_found</code> エラー）</li>
-        <li>対象 DB に <strong>タイトル (<code>title</code>)</strong>・<strong>日付 (<code>date</code>)</strong>・<strong>完了チェック (<code>checkbox</code>)</strong> の 3 プロパティを用意し、ガジェットの「⚙ ウィジェット設定」へ DB ID（または DB URL）を入力して保存</li>
+        <li data-i18n-html="notionGuideStep1"><code>https://app.notion.com/developers/connections</code> で <strong>+ New connection</strong> → <strong>名前を入力</strong>（空欄だと Create ボタン無効）→ Authentication method で <strong>API token</strong>（旧 Internal Integration 相当）を選んで <strong>Create connection</strong></li>
+        <li data-i18n-html="notionGuideStep2">Capabilities で <strong>Read content</strong> に加え、チェック書き戻しを行う場合は <strong>Update content</strong> を確認し、発行されたトークン（<code>ntn_...</code>）を下の「＋ 接続を追加」から保存（送信先 <code>api.notion.com</code>、Windows 資格情報マネージャー保管）</li>
+        <li data-i18n-html="notionGuideStep3">Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト (Connections)</code> からコネクトを追加、または開発者コンソールの <code>Content access</code> タブから親ページを選択して共有（※未共有だと <code>object_not_found</code> エラー）</li>
+        <li data-i18n-html="notionGuideStep4">対象 DB に <strong>タイトル (<code>title</code>)</strong>・<strong>日付 (<code>date</code>)</strong>・<strong>完了チェック (<code>checkbox</code>)</strong> の 3 プロパティを用意し、ガジェットの「⚙ ウィジェット設定」へ DB ID（または DB URL）を入力して保存</li>
       </ol>
       <div class="guide-actions">
         <a
@@ -525,6 +553,7 @@
           class="guide-link"
           id="btn-open-notion-integrations"
           rel="noopener noreferrer"
+          data-i18n="openNotionConsoleLink"
         >Notion 開発者コンソール (Connections) を開く ↗</a>
       </div>
     </details>
@@ -532,38 +561,38 @@
     <div id="conn-form-box" class="conn-form-box" hidden>
       <div class="panel-head" style="margin-bottom: 0;">
         <strong id="conn-form-title">新しい外部サービス接続を追加</strong>
-        <button type="button" class="secondary" id="btn-cancel-conn-form">閉じる</button>
+        <button type="button" class="secondary" id="btn-cancel-conn-form" data-i18n="closeBtn">閉じる</button>
       </div>
 
       <div class="row">
         <div class="field">
-          <label class="field-label" for="conn-connector">コネクタ種別</label>
+          <label class="field-label" for="conn-connector" data-i18n="fieldConnector">コネクタ種別</label>
           <select id="conn-connector"></select>
         </div>
         <div class="field">
-          <label class="field-label" for="conn-id">接続 ID（例: notion, notion_work）</label>
-          <input id="conn-id" type="text" placeholder="例: notion" autocomplete="off" spellcheck="false" />
+          <label class="field-label" for="conn-id" data-i18n="fieldConnId">接続 ID（例: notion, notion_work）</label>
+          <input id="conn-id" type="text" data-i18n-placeholder="connIdPlaceholder" placeholder="例: notion" autocomplete="off" spellcheck="false" />
         </div>
         <div class="field">
-          <label class="field-label" for="conn-name">表示名</label>
-          <input id="conn-name" type="text" placeholder="例: Notion（個人用）" autocomplete="off" />
+          <label class="field-label" for="conn-name" data-i18n="fieldConnName">表示名</label>
+          <input id="conn-name" type="text" data-i18n-placeholder="connNamePlaceholder" placeholder="例: Notion（個人用）" autocomplete="off" />
         </div>
       </div>
 
       <div class="conn-dest-box" id="conn-dest-box">
         <div class="conn-dest-title">
-          <span>送信先・保管先確認</span>
+          <span data-i18n="connDestTitle">送信先・保管先確認</span>
           <span class="badge" id="conn-dest-official-badge">-</span>
         </div>
-        <div class="conn-dest-row">送信先 URL: <code id="conn-dest-base-url">-</code></div>
-        <div class="conn-dest-row">許可ホスト: <code id="conn-dest-allowed-hosts">-</code></div>
-        <div class="conn-dest-row">資格情報マネージャー保管キー: <code id="conn-dest-target-format">DesktopDashboards:connection:&lt;id&gt;:&lt;key&gt;</code></div>
+        <div class="conn-dest-row"><span data-i18n="connDestUrlLabel">送信先 URL: </span><code id="conn-dest-base-url">-</code></div>
+        <div class="conn-dest-row"><span data-i18n="connDestHostsLabel">許可ホスト: </span><code id="conn-dest-allowed-hosts">-</code></div>
+        <div class="conn-dest-row"><span data-i18n="connDestKeyLabel">資格情報マネージャー保管キー: </span><code id="conn-dest-target-format">DesktopDashboards:connection:&lt;id&gt;:&lt;key&gt;</code></div>
       </div>
 
       <div id="conn-credentials-fields" class="conn-cred-fields"></div>
 
       <div class="row" style="justify-content: flex-end; margin-bottom: 0;">
-        <button type="button" class="primary" id="btn-save-conn">接続を保存</button>
+        <button type="button" class="primary" id="btn-save-conn" data-i18n="saveConnBtn">接続を保存</button>
       </div>
     </div>
 
@@ -575,19 +604,23 @@
     <div class="row" style="justify-content: space-between;">
       <label class="switch">
         <input type="checkbox" id="chk-autostart" />
-        Windows 起動時に自動起動（<code>--silent</code> でトレイ常駐）
+        <span data-i18n-html="autostartLabelHtml">Windows 起動時に自動起動（<code>--silent</code> でトレイ常駐）</span>
       </label>
     </div>
     <div class="meta" style="margin-top: 8px;">
-      WebView2 プロファイル: <span id="data-dir">読み込み中...</span>
+      <span data-i18n="webviewProfileLabel">WebView2 プロファイル: </span><span id="data-dir" data-i18n="loadingText">読み込み中...</span>
     </div>
   </section>
 
+  <script src="i18n.js"></script>
   <script>
     const invoke = window.__TAURI__.core.invoke;
     const listen = window.__TAURI__.event.listen;
     const dialogOpen = window.__TAURI__.dialog?.open;
+    const i18n = window.DD_I18N;
+    const t = (key, vars) => i18n.t(key, vars);
 
+    const languageSelectEl = document.getElementById("language-select");
     const sourceTypeEl = document.getElementById("source-type");
     const titleEl = document.getElementById("widget-title");
     const sourceEl = document.getElementById("widget-source");
@@ -599,23 +632,26 @@
     const statusEl = document.getElementById("status");
     const dataDirEl = document.getElementById("data-dir");
     let samplesDirPath = null;
+    let lastLoadedDataDir = null;
+
+    function updateSourcePlaceholder() {
+      const isFile = sourceTypeEl.value === "file";
+      browseBtn.style.display = isFile ? "inline-block" : "none";
+      sourceEl.placeholder = isFile
+        ? t("sourcePlaceholderFile")
+        : t("sourcePlaceholderUrl");
+    }
 
     function setStatus(msg, isError = false) {
       statusEl.textContent = msg;
       statusEl.className = isError ? "error" : "";
     }
 
-    sourceTypeEl.addEventListener("change", () => {
-      const isFile = sourceTypeEl.value === "file";
-      browseBtn.style.display = isFile ? "inline-block" : "none";
-      sourceEl.placeholder = isFile
-        ? "C:\\path\\to\\widget.html"
-        : "https://example.com/...";
-    });
+    sourceTypeEl.addEventListener("change", updateSourcePlaceholder);
 
     browseBtn.addEventListener("click", async () => {
       if (!dialogOpen) {
-        setStatus("ファイル選択ダイアログが利用できません。", true);
+        setStatus(t("dialogUnavailable"), true);
         return;
       }
       try {
@@ -627,7 +663,7 @@
         }
         const dialogOptions = {
           multiple: false,
-          filters: [{ name: "HTML ファイル", extensions: ["html", "htm"] }],
+          filters: [{ name: t("htmlFilesFilter"), extensions: ["html", "htm"] }],
         };
         if (samplesDirPath) {
           dialogOptions.defaultPath = samplesDirPath;
@@ -637,7 +673,7 @@
           sourceEl.value = selected;
         }
       } catch (err) {
-        setStatus(`ファイル選択エラー: ${err}`, true);
+        setStatus(t("filePickError", { err }), true);
       }
     });
 
@@ -646,35 +682,31 @@
       const source = sourceEl.value.trim();
       const title = titleEl.value.trim();
       if (!source) {
-        setStatus("URL またはファイルパスを入力してください。", true);
+        setStatus(t("emptySourceError"), true);
         return;
       }
       try {
         await invoke("add_widget", { sourceType, source, title });
         sourceEl.value = "";
         titleEl.value = "";
-        setStatus("ガジェットを追加しました。");
+        setStatus(t("widgetAdded"));
         await refreshAll();
       } catch (err) {
-        setStatus(`追加エラー: ${err}`, true);
+        setStatus(t("widgetAddError", { err }), true);
       }
     });
 
     reloadAllBtn.addEventListener("click", async () => {
       await invoke("reload_all_widgets");
-      setStatus("表示中のガジェットを再読み込みしました。");
+      setStatus(t("widgetsReloaded"));
     });
 
     autostartChk.addEventListener("change", async () => {
       try {
         await invoke("set_autostart", { enabled: autostartChk.checked });
-        setStatus(
-          autostartChk.checked
-            ? "Windows 起動時の自動起動を有効にしました。"
-            : "Windows 起動時の自動起動を無効にしました。"
-        );
+        setStatus(autostartChk.checked ? t("autostartEnabled") : t("autostartDisabled"));
       } catch (err) {
-        setStatus(`自動起動設定エラー: ${err}`, true);
+        setStatus(t("autostartError", { err }), true);
         await refreshAutostart();
       }
     });
@@ -698,8 +730,8 @@
 
       const updateSummaryText = (missing) => {
         summary.textContent = missing
-          ? "⚙ ウィジェット設定（DD.config・未設定項目あり）"
-          : "⚙ ウィジェット設定（DD.config）";
+          ? t("ddConfigMissingSummary")
+          : t("ddConfigSummary");
       };
 
       const initialMissing = hasMissingRequired();
@@ -717,6 +749,7 @@
         fieldWrap.className = "widget-config-field";
 
         const rawValue = valuesMap[field.key] !== undefined ? valuesMap[field.key] : field.default;
+        const localized = i18n.translateManifestField(configForm.manifest_id, field);
 
         if (field.type === "boolean") {
           const chkLabel = document.createElement("label");
@@ -725,17 +758,17 @@
           chk.type = "checkbox";
           chk.checked = Boolean(rawValue);
           chkLabel.appendChild(chk);
-          chkLabel.appendChild(document.createTextNode(field.label || field.key));
+          chkLabel.appendChild(document.createTextNode(localized.label));
           fieldWrap.appendChild(chkLabel);
           controlEntries.push({ field, control: chk, kind: "boolean" });
         } else {
           const lbl = document.createElement("label");
           lbl.className = "field-label";
-          lbl.textContent = `${field.label || field.key}${field.required ? " [必須]" : ""}`;
+          lbl.textContent = `${localized.label}${field.required ? t("requiredBracket") : ""}`;
           const inp = document.createElement("input");
           inp.type = "text";
           inp.value = rawValue !== null && rawValue !== undefined ? String(rawValue) : "";
-          inp.placeholder = field.placeholder || "";
+          inp.placeholder = localized.placeholder || "";
           inp.autocomplete = "off";
           inp.spellcheck = false;
           fieldWrap.appendChild(lbl);
@@ -743,10 +776,10 @@
           controlEntries.push({ field, control: inp, kind: "string" });
         }
 
-        if (field.description) {
+        if (localized.description) {
           const desc = document.createElement("div");
           desc.className = "field-note";
-          desc.textContent = field.description;
+          desc.textContent = localized.description;
           fieldWrap.appendChild(desc);
         }
 
@@ -762,7 +795,7 @@
       const btnSaveConfig = document.createElement("button");
       btnSaveConfig.type = "button";
       btnSaveConfig.className = "primary";
-      btnSaveConfig.textContent = "設定を保存して反映";
+      btnSaveConfig.textContent = t("saveConfigBtn");
       btnSaveConfig.addEventListener("click", async () => {
         const nextValues = {};
         for (const entry of controlEntries) {
@@ -774,7 +807,7 @@
         }
         btnSaveConfig.disabled = true;
         inlineStatus.className = "widget-config-status";
-        inlineStatus.textContent = "保存中...";
+        inlineStatus.textContent = t("savingText");
         try {
           const updated = await invoke("save_widget_config", { id: w.id, values: nextValues });
           const updatedValues = updated?.values && typeof updated.values === "object" ? updated.values : nextValues;
@@ -791,12 +824,12 @@
           }
           updateSummaryText(hasMissingRequired());
           inlineStatus.className = "widget-config-status";
-          inlineStatus.textContent = "保存し、ガジェットへ反映しました。";
-          setStatus(`「${w.title}」のウィジェット設定を保存して反映しました。`);
+          inlineStatus.textContent = t("configSavedInline");
+          setStatus(t("configSavedStatus", { title: w.title }));
         } catch (err) {
           inlineStatus.className = "widget-config-status error";
-          inlineStatus.textContent = `保存エラー: ${err}`;
-          setStatus(`ウィジェット設定保存エラー: ${err}`, true);
+          inlineStatus.textContent = t("configSaveInlineError", { err });
+          setStatus(t("configSaveStatusError", { err }), true);
         } finally {
           btnSaveConfig.disabled = false;
         }
@@ -824,7 +857,7 @@
       if (!widgets.length) {
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = "ガジェットはまだ登録されていません。";
+        empty.textContent = t("noWidgets");
         widgetListEl.appendChild(empty);
         return;
       }
@@ -861,12 +894,12 @@
           try {
             await invoke("toggle_widget", { id: w.id, enabled: toggleChk.checked });
           } catch (err) {
-            setStatus(`切替エラー: ${err}`, true);
+            setStatus(t("toggleError", { err }), true);
             await refreshWidgets();
           }
         });
         toggleLabel.appendChild(toggleChk);
-        toggleLabel.appendChild(document.createTextNode("表示"));
+        toggleLabel.appendChild(document.createTextNode(t("visibleToggle")));
 
         top.appendChild(titleWrap);
         top.appendChild(toggleLabel);
@@ -893,14 +926,14 @@
           return { wrap, inp };
         };
 
-        const xField = mkNumInput("X", w.x);
-        const yField = mkNumInput("Y", w.y);
-        const wField = mkNumInput("幅", w.width, 120);
-        const hField = mkNumInput("高", w.height, 80);
+        const xField = mkNumInput(t("boundX"), w.x);
+        const yField = mkNumInput(t("boundY"), w.y);
+        const wField = mkNumInput(t("boundW"), w.width, 120);
+        const hField = mkNumInput(t("boundH"), w.height, 80);
 
         const btnApply = document.createElement("button");
         btnApply.className = "secondary";
-        btnApply.textContent = "適用";
+        btnApply.textContent = t("applyBtn");
         btnApply.addEventListener("click", async () => {
           const x = parseInt(xField.inp.value, 10) || 0;
           const y = parseInt(yField.inp.value, 10) || 0;
@@ -908,9 +941,9 @@
           const height = Math.max(80, parseInt(hField.inp.value, 10) || w.height);
           try {
             await invoke("update_widget_bounds", { id: w.id, x, y, width, height });
-            setStatus(`「${w.title}」の位置・サイズを更新しました。`);
+            setStatus(t("boundsUpdated", { title: w.title }));
           } catch (err) {
-            setStatus(`更新エラー: ${err}`, true);
+            setStatus(t("boundsUpdateError", { err }), true);
           }
         });
 
@@ -927,16 +960,16 @@
           const btnDuplicate = document.createElement("button");
           btnDuplicate.type = "button";
           btnDuplicate.className = "secondary";
-          btnDuplicate.textContent = "＋ 増やす";
-          btnDuplicate.title = "同じウィジェットの空の新規インスタンスを追加";
+          btnDuplicate.textContent = t("duplicateBtn");
+          btnDuplicate.title = t("duplicateTitle");
           btnDuplicate.addEventListener("click", async () => {
             btnDuplicate.disabled = true;
             try {
               const created = await invoke("duplicate_widget", { id: w.id });
-              setStatus(`「${created?.title || w.title}」を新規追加しました。`);
+              setStatus(t("duplicateCreated", { title: created?.title || w.title }));
               await refreshWidgets();
             } catch (err) {
-              setStatus(`複製エラー: ${err}`, true);
+              setStatus(t("duplicateError", { err }), true);
             } finally {
               btnDuplicate.disabled = false;
             }
@@ -946,24 +979,24 @@
 
         const btnReload = document.createElement("button");
         btnReload.className = "secondary";
-        btnReload.textContent = "再読込";
+        btnReload.textContent = t("reloadBtn");
         btnReload.addEventListener("click", () => invoke("reload_widget", { id: w.id }));
 
         const btnReset = document.createElement("button");
         btnReset.className = "secondary";
-        btnReset.textContent = "中央へ戻す";
+        btnReset.textContent = t("centerBtn");
         btnReset.addEventListener("click", async () => {
           await invoke("reset_widget_position", { id: w.id });
-          setStatus(`「${w.title}」の位置を中央へ戻しました。`);
+          setStatus(t("centeredStatus", { title: w.title }));
           await refreshWidgets();
         });
 
         const btnDelete = document.createElement("button");
         btnDelete.className = "danger";
-        btnDelete.textContent = "削除";
+        btnDelete.textContent = t("deleteBtn");
         btnDelete.addEventListener("click", async () => {
           await invoke("delete_widget", { id: w.id });
-          setStatus(`「${w.title}」を削除しました。`);
+          setStatus(t("deletedStatus", { title: w.title }));
           await refreshWidgets();
         });
 
@@ -1003,7 +1036,7 @@
               customCss: stateDraft.customCss,
             });
           } catch (err) {
-            setStatus(`設定更新エラー: ${err}`, true);
+            setStatus(t("settingsUpdateError", { err }), true);
           }
         };
 
@@ -1023,9 +1056,9 @@
           return lbl;
         };
 
-        settingsGrid.appendChild(mkFlag("ロック", stateDraft.locked, (v) => { stateDraft.locked = v; }));
-        settingsGrid.appendChild(mkFlag("クリック透過", stateDraft.clickThrough, (v) => { stateDraft.clickThrough = v; }));
-        settingsGrid.appendChild(mkFlag("フォーカス非奪取", stateDraft.noActivate, (v) => { stateDraft.noActivate = v; }));
+        settingsGrid.appendChild(mkFlag(t("flagLock"), stateDraft.locked, (v) => { stateDraft.locked = v; }));
+        settingsGrid.appendChild(mkFlag(t("flagClickThrough"), stateDraft.clickThrough, (v) => { stateDraft.clickThrough = v; }));
+        settingsGrid.appendChild(mkFlag(t("flagNoActivate"), stateDraft.noActivate, (v) => { stateDraft.noActivate = v; }));
 
         const opWrap = document.createElement("label");
         opWrap.className = "slider-field";
@@ -1044,7 +1077,7 @@
           stateDraft.opacity = Number(opInput.value) / 100;
           saveSettings();
         });
-        opWrap.appendChild(document.createTextNode("透明度"));
+        opWrap.appendChild(document.createTextNode(t("labelOpacity")));
         opWrap.appendChild(opInput);
         opWrap.appendChild(opValSpan);
         settingsGrid.appendChild(opWrap);
@@ -1066,7 +1099,7 @@
           stateDraft.zoom = Number(zoomInput.value) / 100;
           saveSettings();
         });
-        zoomWrap.appendChild(document.createTextNode("ズーム"));
+        zoomWrap.appendChild(document.createTextNode(t("labelZoom")));
         zoomWrap.appendChild(zoomInput);
         zoomWrap.appendChild(zoomValSpan);
         settingsGrid.appendChild(zoomWrap);
@@ -1077,7 +1110,7 @@
         for (const mins of [0, 1, 5, 15, 30, 60]) {
           const opt = document.createElement("option");
           opt.value = String(mins);
-          opt.textContent = mins === 0 ? "無効" : `${mins}分`;
+          opt.textContent = mins === 0 ? t("reloadOff") : t("reloadMinutes", { mins });
           if (mins === stateDraft.autoReloadMinutes) opt.selected = true;
           reloadSel.appendChild(opt);
         }
@@ -1085,7 +1118,7 @@
           stateDraft.autoReloadMinutes = parseInt(reloadSel.value, 10) || 0;
           saveSettings();
         });
-        reloadWrap.appendChild(document.createTextNode("自動更新"));
+        reloadWrap.appendChild(document.createTextNode(t("labelAutoReload")));
         reloadWrap.appendChild(reloadSel);
         settingsGrid.appendChild(reloadWrap);
 
@@ -1093,8 +1126,8 @@
         modeWrap.className = "slider-field";
         const modeSel = document.createElement("select");
         for (const [val, label] of [
-          ["bottom", "モードA: 最背面固定"],
-          ["worker_w", "モードB: 壁紙埋め込み (WorkerW)"],
+          ["bottom", t("modeBottom")],
+          ["worker_w", t("modeWorkerW")],
         ]) {
           const opt = document.createElement("option");
           opt.value = val;
@@ -1106,7 +1139,7 @@
           stateDraft.placementMode = modeSel.value;
           saveSettings();
         });
-        modeWrap.appendChild(document.createTextNode("配置"));
+        modeWrap.appendChild(document.createTextNode(t("labelPlacement")));
         modeWrap.appendChild(modeSel);
         settingsGrid.appendChild(modeWrap);
 
@@ -1114,23 +1147,23 @@
         cssDetails.className = "css-details";
         const cssSummary = document.createElement("summary");
         cssSummary.textContent = stateDraft.customCss.trim()
-          ? "カスタム CSS（設定あり）"
-          : "カスタム CSS";
+          ? t("customCssActive")
+          : t("customCssLabel");
         const cssWrap = document.createElement("div");
         cssWrap.className = "css-editor-wrap";
         const cssArea = document.createElement("textarea");
-        cssArea.placeholder = "例: body { background: transparent !important; }";
+        cssArea.placeholder = t("customCssPlaceholder");
         cssArea.value = stateDraft.customCss;
         const cssActions = document.createElement("div");
         cssActions.style.display = "flex";
         cssActions.style.justifyContent = "flex-end";
         const btnCssApply = document.createElement("button");
         btnCssApply.className = "secondary";
-        btnCssApply.textContent = "CSS 適用";
+        btnCssApply.textContent = t("applyCssBtn");
         btnCssApply.addEventListener("click", async () => {
           stateDraft.customCss = cssArea.value;
           await saveSettings();
-          setStatus(`「${w.title}」にカスタム CSS を適用しました。`);
+          setStatus(t("customCssApplied", { title: w.title }));
         });
         cssActions.appendChild(btnCssApply);
         cssWrap.appendChild(cssArea);
@@ -1203,7 +1236,7 @@
       try {
         await openExternalUrl("https://app.notion.com/developers/connections");
       } catch (err) {
-        setConnStatus(`外部ブラウザ起動エラー: ${err}`, true);
+        setConnStatus(t("openBrowserError", { err }), true);
       }
     });
 
@@ -1227,10 +1260,10 @@
       }
 
       if (connector.official) {
-        connDestOfficialBadge.textContent = "✓ 公式 (Official)";
+        connDestOfficialBadge.textContent = t("badgeOfficialLong");
         connDestOfficialBadge.className = "badge official";
       } else {
-        connDestOfficialBadge.textContent = "カスタム";
+        connDestOfficialBadge.textContent = t("badgeCustom");
         connDestOfficialBadge.className = "badge custom";
       }
       connDestBaseUrl.textContent = connector.base_url || "-";
@@ -1254,7 +1287,7 @@
       if (schema.length === 0) {
         const note = document.createElement("div");
         note.className = "field-note";
-        note.textContent = "このコネクタには追加の認証フィールド定義がありません。";
+        note.textContent = t("noCredFieldsNote");
         connCredFieldsEl.appendChild(note);
         return;
       }
@@ -1271,8 +1304,8 @@
         const inputId = `conn-cred-${field.key}`;
         label.htmlFor = inputId;
         const reqLabel = isEdit
-          ? (configuredKeys.has(field.key) ? "登録済み" : "未登録")
-          : (field.required ? "必須" : "任意");
+          ? (configuredKeys.has(field.key) ? t("credStatusSaved") : t("credStatusUnset"))
+          : (field.required ? t("credStatusRequired") : t("credStatusOptional"));
         label.textContent = `${field.label || field.key} (${field.key}) [${reqLabel}]`;
         wrap.appendChild(label);
 
@@ -1294,11 +1327,11 @@
           const toggleVisBtn = document.createElement("button");
           toggleVisBtn.type = "button";
           toggleVisBtn.className = "secondary";
-          toggleVisBtn.textContent = "表示";
+          toggleVisBtn.textContent = t("btnShowSecret");
           toggleVisBtn.addEventListener("click", () => {
             const isMasked = inp.type === "password";
             inp.type = isMasked ? "text" : "password";
-            toggleVisBtn.textContent = isMasked ? "隠す" : "表示";
+            toggleVisBtn.textContent = isMasked ? t("btnHideSecret") : t("btnShowSecret");
           });
           row.appendChild(toggleVisBtn);
         }
@@ -1308,7 +1341,7 @@
         if (isEdit) {
           const hint = document.createElement("div");
           hint.className = "field-note";
-          hint.textContent = "差し替える場合のみ入力（空欄なら既存の秘密を維持）";
+          hint.textContent = t("credReplaceHint");
           wrap.appendChild(hint);
         }
 
@@ -1323,7 +1356,7 @@
         if (inp.dataset.fieldType === "secret") {
           inp.type = "password";
           if (inp.nextElementSibling) {
-            inp.nextElementSibling.textContent = "表示";
+            inp.nextElementSibling.textContent = t("btnShowSecret");
           }
         }
       }
@@ -1334,14 +1367,14 @@
       for (const c of connectorsCache) {
         const opt = document.createElement("option");
         opt.value = c.id;
-        opt.textContent = `${c.name} (${c.official ? "公式" : "カスタム"})`;
+        opt.textContent = `${c.name} (${c.official ? t("badgeOfficialShort") : t("badgeCustom")})`;
         connConnectorEl.appendChild(opt);
       }
       if (selectedConnectorId) {
         if (!connectorsCache.some((c) => c.id === selectedConnectorId)) {
           const opt = document.createElement("option");
           opt.value = selectedConnectorId;
-          opt.textContent = `${selectedConnectorId} (定義未検出)`;
+          opt.textContent = t("connectorMissingDef", { id: selectedConnectorId });
           connConnectorEl.appendChild(opt);
         }
         connConnectorEl.value = selectedConnectorId;
@@ -1352,8 +1385,8 @@
 
     function openConnectionFormForAdd() {
       editingConnectionId = null;
-      connFormTitle.textContent = "新しい外部サービス接続を追加";
-      saveConnBtn.textContent = "接続を保存";
+      connFormTitle.textContent = t("connFormTitleAdd");
+      saveConnBtn.textContent = t("saveConnBtn");
       populateConnectorOptions();
       connConnectorEl.disabled = false;
       connIdEl.disabled = false;
@@ -1374,8 +1407,8 @@
 
     function openConnectionFormForEdit(conn) {
       editingConnectionId = conn.id;
-      connFormTitle.textContent = `接続を編集: ${conn.id}`;
-      saveConnBtn.textContent = "変更を保存";
+      connFormTitle.textContent = t("connFormTitleEdit", { id: conn.id });
+      saveConnBtn.textContent = t("saveChangesBtn");
       populateConnectorOptions(conn.connector_id);
       connConnectorEl.disabled = true;
       connIdEl.value = conn.id;
@@ -1443,11 +1476,11 @@
       const name = connNameEl.value.trim();
       const connectorId = connConnectorEl.value;
       if (!id) {
-        setConnStatus("接続 ID を入力してください。", true);
+        setConnStatus(t("errEnterConnId"), true);
         return;
       }
       if (!connectorId) {
-        setConnStatus("コネクタ種別を選択してください。", true);
+        setConnStatus(t("errSelectConnector"), true);
         return;
       }
 
@@ -1473,10 +1506,10 @@
         });
         clearCredentialInputs();
         closeConnectionForm();
-        setConnStatus(`接続「${saved.id}」を保存しました（資格情報マネージャーへ安全に保管）。`);
+        setConnStatus(t("connSavedStatus", { id: saved.id }));
         await refreshConnections();
       } catch (err) {
-        setConnStatus(`接続保存エラー: ${err}`, true);
+        setConnStatus(t("connSaveError", { err }), true);
       } finally {
         saveConnBtn.disabled = false;
       }
@@ -1491,7 +1524,7 @@
           updateDestinationPreview();
         }
       } catch (err) {
-        setConnStatus(`コネクタ一覧取得エラー: ${err}`, true);
+        setConnStatus(t("connectorsFetchError", { err }), true);
       }
     }
 
@@ -1515,7 +1548,7 @@
       if (res.hint) {
         const hint = document.createElement("div");
         hint.className = "conn-test-hint";
-        hint.textContent = `ヒント: ${res.hint}`;
+        hint.textContent = t("hintPrefix", { hint: res.hint });
         container.appendChild(hint);
       }
     }
@@ -1524,7 +1557,7 @@
       try {
         connectionsCache = await invoke("list_connections");
       } catch (err) {
-        setConnStatus(`接続一覧取得エラー: ${err}`, true);
+        setConnStatus(t("connectionsFetchError", { err }), true);
         return;
       }
 
@@ -1532,7 +1565,7 @@
       if (!connectionsCache.length) {
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = "外部サービス接続はまだ登録されていません。「＋ 接続を追加」から設定してください。";
+        empty.textContent = t("noConnections");
         connectionListEl.appendChild(empty);
         return;
       }
@@ -1550,7 +1583,7 @@
 
         const officialBadge = document.createElement("span");
         officialBadge.className = `badge ${conn.official ? "official" : "custom"}`;
-        officialBadge.textContent = conn.official ? "✓ 公式 (Official)" : "カスタム";
+        officialBadge.textContent = conn.official ? t("badgeOfficialLong") : t("badgeCustom");
 
         const titleSpan = document.createElement("span");
         titleSpan.className = "widget-title";
@@ -1566,7 +1599,7 @@
 
         const secretBadge = document.createElement("span");
         secretBadge.className = `badge ${conn.has_secret ? "file" : "warn"}`;
-        secretBadge.textContent = conn.has_secret ? "資格情報: 登録済み" : "資格情報: 未登録";
+        secretBadge.textContent = conn.has_secret ? t("connCredSavedBadge") : t("connCredUnsetBadge");
 
         top.appendChild(titleWrap);
         top.appendChild(secretBadge);
@@ -1574,9 +1607,9 @@
         const metaDiv = document.createElement("div");
         metaDiv.className = "widget-source";
         const hostsText = Array.isArray(conn.allowed_hosts) && conn.allowed_hosts.length
-          ? ` (許可ホスト: ${conn.allowed_hosts.join(", ")})`
+          ? t("connAllowedHostsInline", { hosts: conn.allowed_hosts.join(", ") })
           : "";
-        metaDiv.textContent = `送信先: ${conn.base_url || "-"}${hostsText}`;
+        metaDiv.textContent = t("connDestLine", { url: conn.base_url || "-", hosts: hostsText });
 
         const bottom = document.createElement("div");
         bottom.className = "widget-bottom";
@@ -1585,8 +1618,8 @@
         keysInfo.className = "widget-coords";
         const keyList = Array.isArray(conn.configured_keys) && conn.configured_keys.length
           ? conn.configured_keys.join(", ")
-          : "なし";
-        keysInfo.textContent = `保管キー: ${keyList}`;
+          : t("noneLabel");
+        keysInfo.textContent = t("connKeysLine", { keys: keyList });
 
         const actions = document.createElement("div");
         actions.className = "widget-actions";
@@ -1598,7 +1631,7 @@
         const btnTest = document.createElement("button");
         btnTest.type = "button";
         btnTest.className = "secondary";
-        btnTest.textContent = "接続テスト";
+        btnTest.textContent = t("testConnBtn");
         btnTest.addEventListener("click", async () => {
           btnTest.disabled = true;
           try {
@@ -1606,19 +1639,19 @@
             renderConnectionTestResult(testResultBox, res);
             setConnStatus(
               res.ok
-                ? `接続「${conn.id}」テスト成功: ${res.summary}`
-                : `接続「${conn.id}」テスト失敗: ${res.summary}`,
+                ? t("testConnPassStatus", { id: conn.id, summary: res.summary })
+                : t("testConnFailStatus", { id: conn.id, summary: res.summary }),
               !res.ok
             );
           } catch (err) {
             renderConnectionTestResult(testResultBox, {
               ok: false,
               status: 0,
-              summary: "テスト実行エラー",
+              summary: t("testExecErrorSummary"),
               detail: String(err),
               hint: null,
             });
-            setConnStatus(`接続テストエラー: ${err}`, true);
+            setConnStatus(t("testConnErrorStatus", { err }), true);
           } finally {
             btnTest.disabled = false;
           }
@@ -1627,7 +1660,7 @@
         const btnEdit = document.createElement("button");
         btnEdit.type = "button";
         btnEdit.className = "secondary";
-        btnEdit.textContent = "編集（トークン差替）";
+        btnEdit.textContent = t("editConnBtn");
         btnEdit.addEventListener("click", async () => {
           if (connectorsCache.length === 0) {
             await refreshConnectors();
@@ -1638,7 +1671,7 @@
         const btnDelete = document.createElement("button");
         btnDelete.type = "button";
         btnDelete.className = "danger";
-        btnDelete.textContent = "削除";
+        btnDelete.textContent = t("deleteBtn");
         btnDelete.addEventListener("click", async () => {
           btnDelete.disabled = true;
           try {
@@ -1646,10 +1679,10 @@
             if (editingConnectionId === conn.id) {
               closeConnectionForm();
             }
-            setConnStatus(`接続「${conn.id}」と資格情報マネージャーの秘密を削除しました。`);
+            setConnStatus(t("connDeletedStatus", { id: conn.id }));
             await refreshConnections();
           } catch (err) {
-            setConnStatus(`削除エラー: ${err}`, true);
+            setConnStatus(t("connDeleteError", { err }), true);
           } finally {
             btnDelete.disabled = false;
           }
@@ -1670,6 +1703,48 @@
       }
     }
 
+    function applyLanguageUiState(resolvedLang, preference = null) {
+      i18n.setLang(resolvedLang);
+      if (preference) {
+        languageSelectEl.value = preference;
+      }
+      i18n.applyI18n();
+      updateSourcePlaceholder();
+      if (lastLoadedDataDir !== null) {
+        dataDirEl.textContent = lastLoadedDataDir;
+      }
+      if (!connFormBox.hidden) {
+        if (editingConnectionId !== null) {
+          const existing = connectionsCache.find((c) => c.id === editingConnectionId);
+          if (existing) {
+            connFormTitle.textContent = t("connFormTitleEdit", { id: existing.id });
+            saveConnBtn.textContent = t("saveChangesBtn");
+          }
+        } else {
+          connFormTitle.textContent = t("connFormTitleAdd");
+          saveConnBtn.textContent = t("saveConnBtn");
+        }
+        populateConnectorOptions(connConnectorEl.value || null);
+        updateDestinationPreview();
+        const existingConn = editingConnectionId !== null
+          ? connectionsCache.find((c) => c.id === editingConnectionId) || null
+          : null;
+        renderCredentialSchemaFields(getSelectedConnector(), existingConn);
+      }
+    }
+
+    languageSelectEl.addEventListener("change", async () => {
+      const preference = languageSelectEl.value || "auto";
+      try {
+        const dto = await invoke("set_language", { preference });
+        applyLanguageUiState(dto.resolved, dto.preference);
+        await refreshAll();
+        setStatus(t("langUpdated"));
+      } catch (err) {
+        setStatus(String(err), true);
+      }
+    });
+
     async function refreshAll() {
       await Promise.all([
         refreshWidgets(),
@@ -1687,12 +1762,21 @@
       refreshConnections();
     });
 
+    listen("language-updated", async (event) => {
+      const payload = event?.payload;
+      if (payload && payload.resolved) {
+        applyLanguageUiState(payload.resolved, payload.preference);
+        await refreshAll();
+      }
+    });
+
     invoke("get_webview_data_dir")
       .then((dir) => {
+        lastLoadedDataDir = dir;
         dataDirEl.textContent = dir;
       })
       .catch((err) => {
-        dataDirEl.textContent = `取得失敗: ${err}`;
+        dataDirEl.textContent = t("fetchFailed", { err });
       });
 
     invoke("get_samples_dir")
@@ -1703,7 +1787,15 @@
       })
       .catch(() => {});
 
-    refreshAll();
+    (async () => {
+      try {
+        const langDto = await invoke("get_language");
+        applyLanguageUiState(langDto.resolved, langDto.preference);
+      } catch (_) {
+        applyLanguageUiState(/^ja\b/i.test(navigator.language || "") ? "ja" : "en", "auto");
+      }
+      await refreshAll();
+    })();
   </script>
 </body>
 </html>

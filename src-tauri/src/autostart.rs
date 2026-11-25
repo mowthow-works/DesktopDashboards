@@ -105,7 +105,7 @@ fn query_packaged_startup_state() -> Result<AutostartOsState, String> {
 }
 
 #[cfg(windows)]
-fn set_packaged_startup_enabled(enabled: bool) -> Result<(), String> {
+fn set_packaged_startup_enabled(enabled: bool, lang: crate::i18n::Language) -> Result<(), String> {
     use windows::core::HSTRING;
     use windows::ApplicationModel::{StartupTask, StartupTaskState};
 
@@ -123,10 +123,7 @@ fn set_packaged_startup_enabled(enabled: bool) -> Result<(), String> {
         match current {
             StartupTaskState::Enabled | StartupTaskState::EnabledByPolicy => return Ok(()),
             StartupTaskState::DisabledByUser | StartupTaskState::DisabledByPolicy => {
-                return Err(
-                    "Windows の「設定 > アプリ > スタートアップ」で無効化されているため、自動起動を有効にできません。設定アプリから有効にしてください。"
-                        .to_string(),
-                );
+                return Err(crate::i18n::err_autostart_disabled_by_user(lang).to_string());
             }
             _ => {}
         }
@@ -138,11 +135,10 @@ fn set_packaged_startup_enabled(enabled: bool) -> Result<(), String> {
             .map_err(|e| format!("StartupTask::RequestEnableAsync().join() failed: {e}"))?;
         match updated {
             StartupTaskState::Enabled | StartupTaskState::EnabledByPolicy => Ok(()),
-            StartupTaskState::DisabledByUser | StartupTaskState::DisabledByPolicy => Err(
-                "Windows の「設定 > アプリ > スタートアップ」で無効化されているため、自動起動を有効にできません。設定アプリから有効にしてください。"
-                    .to_string(),
-            ),
-            _ => Err("Windows 側で自動起動を有効にできませんでした。".to_string()),
+            StartupTaskState::DisabledByUser | StartupTaskState::DisabledByPolicy => {
+                Err(crate::i18n::err_autostart_disabled_by_user(lang).to_string())
+            }
+            _ => Err(crate::i18n::err_autostart_enable_failed(lang).to_string()),
         }
     } else {
         task.Disable()
@@ -180,7 +176,8 @@ pub fn set_os_autostart_enabled_blocking(app: &AppHandle, enabled: bool) -> Resu
     if is_packaged_app() {
         #[cfg(windows)]
         {
-            return set_packaged_startup_enabled(enabled);
+            let lang = crate::i18n::current_language(app);
+            return set_packaged_startup_enabled(enabled, lang);
         }
         #[cfg(not(windows))]
         {

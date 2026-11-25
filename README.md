@@ -1,6 +1,6 @@
 # DesktopDashboards
 
-[![Release](https://img.shields.io/badge/version-v0.3.0-blue.svg)](https://github.com/mowthow-works/DesktopDashboards/releases)
+[![Release](https://img.shields.io/badge/version-v0.4.0-blue.svg)](https://github.com/mowthow-works/DesktopDashboards/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](https://www.microsoft.com/windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -39,6 +39,7 @@ URL を登録するだけ、あるいは手元の HTML ファイルを指定す�
 - **入力中を待つスマート自動リロード**: 1〜60 分間隔でページを自動更新。テキスト入力中や操作直後は自動でリロードを延期して入力内容を守ります
 - **カスタム CSS で好きな部分だけ表示**: ガジェットごとに CSS を設定し、サイドバーやヘッダーを隠して必要なコンテンツだけを画面いっぱいに表示できます
 - **ローカル完結の安全な API 連携**: Notion などの API トークンは Windows 資格情報マネージャーへ暗号化保管し、開発者のサーバーを経由せずに手元の PC から直接通信します
+- **多言語対応（日本語 / English）**: Windows の表示言語に応じた自動判定に加え、管理画面からいつでも日本語・英語を切り替えられます（トレイ・ホバーバー・同梱サンプルにも即時反映）
 
 ---
 

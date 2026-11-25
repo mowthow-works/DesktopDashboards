@@ -20,6 +20,8 @@
     "allow-reload-all-widgets",
     "allow-get-autostart",
     "allow-set-autostart",
+    "allow-get-language",
+    "allow-set-language",
     "allow-list-connectors",
     "allow-list-connections",
     "allow-save-connection",

@@ -213,78 +213,78 @@
 </head>
 <body>
   <header>
-    <h1>自作ガジェット テンプレート</h1>
+    <h1 data-i18n="heading">自作ガジェット テンプレート</h1>
     <span class="tag">LOCAL HTML</span>
   </header>
 
   <section class="card">
-    <h2>ライブ環境ステータス</h2>
+    <h2 data-i18n="statusHeading">ライブ環境ステータス</h2>
     <div class="status-grid">
       <div class="stat">
-        <div class="stat-label">現在時刻</div>
+        <div class="stat-label" data-i18n="clockLabel">現在時刻</div>
         <div class="stat-val" id="live-clock">--:--:--</div>
       </div>
       <div class="stat">
-        <div class="stat-label">描画サイズ</div>
+        <div class="stat-label" data-i18n="sizeLabel">描画サイズ</div>
         <div class="stat-val" id="live-size">0 × 0</div>
       </div>
       <div class="stat full">
-        <div class="stat-label">割り当てオリジン（widgetfile プロトコル）</div>
+        <div class="stat-label" data-i18n="originLabel">割り当てオリジン（widgetfile プロトコル）</div>
         <div class="stat-val" id="live-origin">-</div>
       </div>
     </div>
   </section>
 
   <section class="card">
-    <h2>ローカル HTML ガジェット作成ガイド</h2>
+    <h2 data-i18n="guideHeading">ローカル HTML ガジェット作成ガイド</h2>
     <ul class="spec-list">
-      <li>
+      <li data-i18n-html="guide1">
         このファイル（<code>samples/starter-template.html</code>）を任意のフォルダへコピーして自由に編集できます。
       </li>
-      <li>
+      <li data-i18n-html="guide2">
         同じフォルダ・サブフォルダ内の資産（<code>./style.css</code>、<code>./app.js</code>、画像等）は相対パスで読み込めます。
       </li>
-      <li>
+      <li data-i18n-html="guide3">
         上端 <code>28px</code> に操作バーが表示されるため、<code>body</code> に <code>padding-top: 32px</code> 程度を確保すると操作しやすくなります。
       </li>
-      <li>
+      <li data-i18n-html="guide4">
         管理画面の「カスタム CSS」から <code>body { background: transparent !important; }</code> のような上書きも可能です。
       </li>
-      <li>
+      <li data-i18n-html="guide5">
         外部リンク（<code>https://...</code>）はガジェット内ではなく OS の既定ブラウザで開きます。
       </li>
     </ul>
     <div class="links">
-      <span>外部リンク動作テスト:</span>
-      <a href="https://example.com" target="_blank" rel="noopener noreferrer">
+      <span data-i18n="extLinkLabel">外部リンク動作テスト:</span>
+      <a href="https://example.com" target="_blank" rel="noopener noreferrer" data-i18n="extLinkText">
         example.com を既定ブラウザで開く ↗
       </a>
     </div>
   </section>
 
   <section class="card">
-    <h2>localStorage 永続化テスト</h2>
+    <h2 data-i18n="lsHeading">localStorage 永続化テスト</h2>
     <div class="demo-row">
       <div>
-        保存カウント: <span class="counter-val" id="counter-val">0</span>
+        <span data-i18n="savedCountLabel">保存カウント: </span><span class="counter-val" id="counter-val">0</span>
       </div>
       <div class="btn-group">
-        <button type="button" class="primary" id="btn-inc">+1 カウント</button>
-        <button type="button" class="secondary" id="btn-reset">リセット</button>
+        <button type="button" class="primary" id="btn-inc" data-i18n="incBtn">+1 カウント</button>
+        <button type="button" class="secondary" id="btn-reset" data-i18n="resetBtn">リセット</button>
       </div>
     </div>
   </section>
 
   <section class="card">
     <div class="section-head">
-      <h2>Phase 4b 制限モードテスト（manifest 無し HTML）</h2>
+      <h2 data-i18n="ddHeading">Phase 4b 制限モードテスト（manifest 無し HTML）</h2>
       <span class="tag info" id="dd-test-badge">未実行</span>
     </div>
     <div class="btn-group">
-      <button type="button" class="primary" id="btn-dd-storage-test">DD.storage 読み書きテスト（許可）</button>
-      <button type="button" class="danger" id="btn-dd-connect-test">DD.connect 呼び出しテスト（制限モード拒否）</button>
+      <button type="button" class="primary" id="btn-dd-storage-test" data-i18n="ddStorageBtn">DD.storage 読み書きテスト（許可）</button>
+      <button type="button" class="danger" id="btn-dd-connect-test" data-i18n="ddConnectBtn">DD.connect 呼び出しテスト（制限モード拒否）</button>
     </div>
-    <div class="dd-result" id="dd-test-result">
+    <div class="dd-result" id="dd-test-result" data-i18n-html="ddDefaultDesc">
       対応する <code>.manifest.json</code> が無いローカル HTML では <code>DD.storage</code> のみ利用でき、<code>DD.connect</code> は制限モードとして拒否されます。
     </div>
   </section>
@@ -293,6 +293,93 @@
     (() => {
       const STORAGE_KEY = "dd_sample_starter_counter_v1";
       const DD_TEST_STORAGE_KEY = "starter:restriction_test";
+
+      const I18N = {
+        ja: {
+          docTitle: "自作ガジェット スターターテンプレート - DesktopDashboards",
+          heading: "自作ガジェット テンプレート",
+          statusHeading: "ライブ環境ステータス",
+          clockLabel: "現在時刻",
+          sizeLabel: "描画サイズ",
+          originLabel: "割り当てオリジン（widgetfile プロトコル）",
+          guideHeading: "ローカル HTML ガジェット作成ガイド",
+          guide1: "このファイル（<code>samples/starter-template.html</code>）を任意のフォルダへコピーして自由に編集できます。",
+          guide2: "同じフォルダ・サブフォルダ内の資産（<code>./style.css</code>、<code>./app.js</code>、画像等）は相対パスで読み込めます。",
+          guide3: "上端 <code>28px</code> に操作バーが表示されるため、<code>body</code> に <code>padding-top: 32px</code> 程度を確保すると操作しやすくなります。",
+          guide4: "管理画面の「カスタム CSS」から <code>body { background: transparent !important; }</code> のような上書きも可能です。",
+          guide5: "外部リンク（<code>https://...</code>）はガジェット内ではなく OS の既定ブラウザで開きます。",
+          extLinkLabel: "外部リンク動作テスト:",
+          extLinkText: "example.com を既定ブラウザで開く ↗",
+          lsHeading: "localStorage 永続化テスト",
+          savedCountLabel: "保存カウント: ",
+          incBtn: "+1 カウント",
+          resetBtn: "リセット",
+          ddHeading: "制限モードテスト（manifest 無し HTML）",
+          ddNotRun: "未実行",
+          ddStorageBtn: "DD.storage 読み書きテスト（許可）",
+          ddConnectBtn: "DD.connect 呼び出しテスト（制限モード拒否）",
+          ddDefaultDesc: "対応する <code>.manifest.json</code> が無いローカル HTML では <code>DD.storage</code> のみ利用でき、<code>DD.connect</code> は制限モードとして拒否されます。",
+          ddMissingBadge: "DD 未注入",
+          ddMissingMsg: "FAIL: window.DD が未注入です（ローカル HTML ウィジェットとして開いてテストしてください）。",
+          storagePassBadge: "PASS (許可)",
+          storagePassMsg: (json) => `PASS: manifest 無しの制限モードでも DD.storage.set / get が正常動作しました (${DD_TEST_STORAGE_KEY} = ${json})`,
+          storageMismatchBadge: "FAIL (不一致)",
+          storageMismatchMsg: (json) => `FAIL: 読み戻し値が一致しませんでした (${json})`,
+          storageErrBadge: "FAIL (エラー)",
+          storageErrMsg: (err) => `FAIL: DD.storage テストでエラーが発生しました: ${err}`,
+          connectFailBadge: "FAIL (通過)",
+          connectFailMsg: (json) => `FAIL: manifest 無しにもかかわらず DD.connect.request が許可されました: ${json}`,
+          connectPassBadge: "PASS (制限モード拒否)",
+          connectPassMsg: (err) => `PASS: 期待通り manifest 無しの制限モードとして拒否されました (${err})`
+        },
+        en: {
+          docTitle: "Custom Widget Starter Template - DesktopDashboards",
+          heading: "Custom Widget Starter Template",
+          statusHeading: "Live Environment Status",
+          clockLabel: "Current Time",
+          sizeLabel: "Viewport Size",
+          originLabel: "Assigned Origin (widgetfile protocol)",
+          guideHeading: "Local HTML Widget Authoring Guide",
+          guide1: "Copy this file (<code>samples/starter-template.html</code>) to any folder and customize it freely.",
+          guide2: "Assets in the same folder or subfolders (<code>./style.css</code>, <code>./app.js</code>, images, etc.) can be loaded with relative paths.",
+          guide3: "A <code>28px</code> hover toolbar appears at the top when unlocked; keep roughly <code>padding-top: 32px</code> on <code>body</code>.",
+          guide4: "You can also override styles per widget via \"Custom CSS\" in the Manager (e.g. <code>body { background: transparent !important; }</code>).",
+          guide5: "External links (<code>https://...</code>) open in your default browser instead of inside the widget.",
+          extLinkLabel: "External link test:",
+          extLinkText: "Open example.com in default browser ↗",
+          lsHeading: "localStorage Persistence Test",
+          savedCountLabel: "Saved count: ",
+          incBtn: "+1 Count",
+          resetBtn: "Reset",
+          ddHeading: "Restricted Mode Test (HTML without manifest)",
+          ddNotRun: "Not run",
+          ddStorageBtn: "Test DD.storage Read/Write (Allowed)",
+          ddConnectBtn: "Test DD.connect Call (Blocked)",
+          ddDefaultDesc: "Without a matching <code>.manifest.json</code>, only <code>DD.storage</code> is available and <code>DD.connect</code> is blocked in restricted mode.",
+          ddMissingBadge: "No DD Bridge",
+          ddMissingMsg: "FAIL: window.DD is not injected (open this file as a Local HTML widget in DesktopDashboards).",
+          storagePassBadge: "PASS (Allowed)",
+          storagePassMsg: (json) => `PASS: DD.storage.set / get worked in restricted mode (${DD_TEST_STORAGE_KEY} = ${json})`,
+          storageMismatchBadge: "FAIL (Mismatch)",
+          storageMismatchMsg: (json) => `FAIL: Read-back value did not match (${json})`,
+          storageErrBadge: "FAIL (Error)",
+          storageErrMsg: (err) => `FAIL: DD.storage test threw an error: ${err}`,
+          connectFailBadge: "FAIL (Allowed)",
+          connectFailMsg: (json) => `FAIL: DD.connect.request succeeded even without a manifest: ${json}`,
+          connectPassBadge: "PASS (Blocked)",
+          connectPassMsg: (err) => `PASS: DD.connect was blocked in restricted mode as expected (${err})`
+        }
+      };
+
+      function resolveLang(candidate) {
+        const raw = typeof candidate === "string" && candidate ? candidate : (window.__ddLang || navigator.language || "en");
+        return /^ja\b/i.test(raw) ? "ja" : "en";
+      }
+
+      let currentLang = resolveLang();
+      let hasRunDDTest = false;
+      const L = () => I18N[currentLang] || I18N.en;
+
       const clockEl = document.getElementById("live-clock");
       const sizeEl = document.getElementById("live-size");
       const originEl = document.getElementById("live-origin");
@@ -303,6 +390,22 @@
       const ddTestResultEl = document.getElementById("dd-test-result");
       const ddStorageTestBtn = document.getElementById("btn-dd-storage-test");
       const ddConnectTestBtn = document.getElementById("btn-dd-connect-test");
+
+      function applyStaticLanguage() {
+        const dict = L();
+        document.documentElement.lang = currentLang;
+        document.title = dict.docTitle;
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          el.textContent = dict[el.dataset.i18n];
+        });
+        document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+          if (el === ddTestResultEl && hasRunDDTest) return;
+          el.innerHTML = dict[el.dataset.i18nHtml];
+        });
+        if (!hasRunDDTest) {
+          ddTestBadgeEl.textContent = dict.ddNotRun;
+        }
+      }
 
       function updateClock() {
         const now = new Date();
@@ -344,6 +447,7 @@
       }
 
       function setDDTestResult(badgeText, badgeTone, message, boxTone) {
+        hasRunDDTest = true;
         ddTestBadgeEl.textContent = badgeText;
         ddTestBadgeEl.className = badgeTone ? `tag ${badgeTone}` : "tag";
         ddTestResultEl.textContent = message;
@@ -356,13 +460,9 @@
       }
 
       async function runDDStorageTest() {
+        const dict = L();
         if (!hasDDBridge()) {
-          setDDTestResult(
-            "DD 未注入",
-            "err",
-            "FAIL: window.DD が未注入です（ローカル HTML ウィジェットとして開いてテストしてください）。",
-            "err"
-          );
+          setDDTestResult(dict.ddMissingBadge, "err", dict.ddMissingMsg, "err");
           return;
         }
         setDDTestBusy(true);
@@ -379,24 +479,24 @@
             loaded.testedAt === payload.testedAt
           ) {
             setDDTestResult(
-              "PASS (許可)",
+              dict.storagePassBadge,
               "",
-              `PASS: manifest 無しの制限モードでも DD.storage.set / get が正常動作しました (${DD_TEST_STORAGE_KEY} = ${JSON.stringify(loaded)})`,
+              dict.storagePassMsg(JSON.stringify(loaded)),
               "ok"
             );
           } else {
             setDDTestResult(
-              "FAIL (不一致)",
+              dict.storageMismatchBadge,
               "err",
-              `FAIL: 読み戻し値が一致しませんでした (${JSON.stringify(loaded)})`,
+              dict.storageMismatchMsg(JSON.stringify(loaded)),
               "err"
             );
           }
         } catch (err) {
           setDDTestResult(
-            "FAIL (エラー)",
+            dict.storageErrBadge,
             "err",
-            `FAIL: DD.storage テストでエラーが発生しました: ${formatDDError(err)}`,
+            dict.storageErrMsg(formatDDError(err)),
             "err"
           );
         } finally {
@@ -405,13 +505,9 @@
       }
 
       async function runDDConnectRestrictedTest() {
+        const dict = L();
         if (!hasDDBridge()) {
-          setDDTestResult(
-            "DD 未注入",
-            "err",
-            "FAIL: window.DD が未注入です（ローカル HTML ウィジェットとして開いてテストしてください）。",
-            "err"
-          );
+          setDDTestResult(dict.ddMissingBadge, "err", dict.ddMissingMsg, "err");
           return;
         }
         setDDTestBusy(true);
@@ -422,16 +518,16 @@
             path: "/v1/users/me",
           });
           setDDTestResult(
-            "FAIL (通過)",
+            dict.connectFailBadge,
             "err",
-            `FAIL: manifest 無しにもかかわらず DD.connect.request が許可されました: ${JSON.stringify(res)}`,
+            dict.connectFailMsg(JSON.stringify(res)),
             "err"
           );
         } catch (err) {
           setDDTestResult(
-            "PASS (制限モード拒否)",
+            dict.connectPassBadge,
             "",
-            `PASS: 期待通り manifest 無しの制限モードとして拒否されました (${formatDDError(err)})`,
+            dict.connectPassMsg(formatDDError(err)),
             "ok"
           );
         } finally {
@@ -483,6 +579,12 @@
         void runDDConnectRestrictedTest();
       });
 
+      window.addEventListener("dd-language-changed", (ev) => {
+        currentLang = resolveLang(ev?.detail?.lang);
+        applyStaticLanguage();
+      });
+
+      applyStaticLanguage();
       originEl.textContent = location.origin || location.href;
       updateClock();
       updateSize();

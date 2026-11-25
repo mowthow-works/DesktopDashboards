@@ -42,6 +42,8 @@ fn main() {
                 "reload_all_widgets",
                 "get_autostart",
                 "set_autostart",
+                "get_language",
+                "set_language",
                 "dd_storage_get",
                 "dd_storage_set",
                 "dd_connect_request",

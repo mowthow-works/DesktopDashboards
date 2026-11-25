@@ -78,6 +78,10 @@ impl Default for WidgetConfig {
     }
 }
 
+fn default_language() -> String {
+    "auto".to_string()
+}
+
 /// アプリ全体の設定 (`config.json`)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -85,6 +89,8 @@ pub struct AppConfig {
     pub version: u32,
     pub placement_mode: PlacementMode,
     pub autostart: bool,
+    #[serde(default = "default_language")]
+    pub language: String,
     pub widgets: Vec<WidgetConfig>,
 }
 
@@ -94,6 +100,7 @@ impl Default for AppConfig {
             version: 1,
             placement_mode: PlacementMode::Bottom,
             autostart: false,
+            language: default_language(),
             widgets: Vec::new(),
         }
     }
@@ -122,7 +129,8 @@ impl ConfigState {
         let mut config = load_with_backup_fallback(&config_path);
 
         if is_first_launch && config.widgets.is_empty() {
-            if let Some(default_widget) = crate::build_default_sample_widget(app) {
+            let lang = crate::i18n::resolve_language(&config.language);
+            if let Some(default_widget) = crate::build_default_sample_widget(app, lang) {
                 config.widgets.push(default_widget);
                 if let Err(e) = save_atomic_with_backup(&config_path, &config) {
                     eprintln!("[config] failed to persist default sample widget: {e}");
@@ -297,5 +305,6 @@ mod tests {
         assert_eq!(cfg.widgets.len(), 1);
         assert_eq!(cfg.widgets[0].id, "legacy-sticky-1");
         assert!(!cfg.widgets[0].local_storage_isolated);
+        assert_eq!(cfg.language, "auto");
     }
 }

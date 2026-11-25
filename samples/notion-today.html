@@ -345,19 +345,19 @@
 <body>
   <header>
     <div class="header-left">
-      <h1>今日のタスク</h1>
+      <h1 data-i18n="heading">今日のタスク</h1>
       <span class="date-badge" id="today-label">----/--/--</span>
     </div>
     <div class="header-right">
       <span class="count-pill" id="count-pill">-</span>
-      <button type="button" class="icon-btn" id="btn-refresh" title="再読み込み">↻</button>
+      <button type="button" class="icon-btn" id="btn-refresh" data-i18n-title="refreshTitle" title="再読み込み">↻</button>
     </div>
   </header>
 
   <div class="error-banner" id="error-banner" hidden>
     <div class="error-head">
       <span id="error-title">エラー</span>
-      <button type="button" class="error-close" id="btn-error-close" title="閉じる">×</button>
+      <button type="button" class="error-close" id="btn-error-close" data-i18n-title="closeTitle" title="閉じる">×</button>
     </div>
     <div id="error-detail"></div>
     <div class="error-hint" id="error-hint" hidden></div>
@@ -367,18 +367,18 @@
     <p class="setup-title" id="setup-title">初期設定が必要です</p>
     <p class="setup-desc" id="setup-reason"></p>
     <ol class="setup-steps">
-      <li>Notion 開発者コンソールで <code>+ New connection</code> → 名前入力 → <code>API token</code> を作成（<code>Read content</code> / <code>Update content</code> を有効化）</li>
-      <li>管理画面の「外部サービス接続（SaaS 連携）」で Notion 接続（例: 接続 ID <code>notion</code>）を保存</li>
-      <li>Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト</code>（または <code>Content access</code>）から共有</li>
-      <li>管理画面のこのガジェットカード内「⚙ ウィジェット設定（<code>DD.config</code>）」へ接続 ID とデータベース ID / URL を入力して保存</li>
+      <li data-i18n-html="step1">Notion 開発者コンソールで <code>+ New connection</code> → 名前入力 → <code>API token</code> を作成（<code>Read content</code> / <code>Update content</code> を有効化）</li>
+      <li data-i18n-html="step2">管理画面の「外部サービス接続（SaaS 連携）」で Notion 接続（例: 接続 ID <code>notion</code>）を保存</li>
+      <li data-i18n-html="step3">Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト</code>（または <code>Content access</code>）から共有</li>
+      <li data-i18n-html="step4">管理画面のこのガジェットカード内「⚙ ウィジェット設定（<code>DD.config</code>）」へ接続 ID とデータベース ID / URL を入力して保存</li>
     </ol>
     <div>
-      <button type="button" class="primary-btn" id="btn-open-console">Notion 開発者コンソールを開く ↗</button>
+      <button type="button" class="primary-btn" id="btn-open-console" data-i18n="openConsoleBtn">Notion 開発者コンソールを開く ↗</button>
     </div>
   </section>
 
   <section class="card" id="tasks-card">
-    <div class="loading-text" id="loading-view">読み込み中...</div>
+    <div class="loading-text" id="loading-view" data-i18n="loading">読み込み中...</div>
     <div class="empty-state" id="empty-view" hidden>
       <strong id="empty-title">今日のタスクはありません</strong>
       <span class="empty-sub" id="empty-sub"></span>
@@ -396,7 +396,119 @@
       const NOTION_CONSOLE_URL = "https://app.notion.com/developers/connections";
       const CACHE_KEY_PREFIX = "notion:data_source_id:";
       const MAX_QUERY_PAGES = 10;
-      const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+      const I18N = {
+        ja: {
+          docTitle: "Notion 今日のタスク - DesktopDashboards",
+          heading: "今日のタスク",
+          refreshTitle: "再読み込み",
+          closeTitle: "閉じる",
+          loading: "読み込み中...",
+          openConsoleBtn: "Notion 開発者コンソールを開く ↗",
+          step1: "Notion 開発者コンソールで <code>+ New connection</code> → 名前入力 → <code>API token</code> を作成（<code>Read content</code> / <code>Update content</code> を有効化）",
+          step2: "管理画面の「外部サービス接続（SaaS 連携）」で Notion 接続（例: 接続 ID <code>notion</code>）を保存",
+          step3: "Notion 側の対象データベース右上の <code>⋯</code> → <code>コネクト</code>（または <code>Content access</code>）から共有",
+          step4: "管理画面のこのガジェットカード内「⚙ ウィジェット設定（<code>DD.config</code>）」へ接続 ID とデータベース ID / URL を入力して保存",
+          weekdays: ["日", "月", "火", "水", "木", "金", "土"],
+          notConfigured: "未設定",
+          errorPill: "エラー",
+          countPill: (active, total) => `未完了 ${active} / ${total}`,
+          untitled: "(無題)",
+          propsEmpty: "プロパティ: -",
+          propsInfo: (dateProp, doneProp) => `プロパティ: 日付=${dateProp || "未検出"} / 完了=${doneProp || "未検出"}`,
+          updatedText: (hms) => `最終更新: ${hms || "-"}`,
+          emptyNoTasks: "今日のタスクはありません",
+          emptyHiddenDone: (n) => `完了済み ${n} 件は設定により非表示です`,
+          emptyAddHint: "新しいタスクを追加するとここに表示されます",
+          emptyFetchFailed: "タスクを取得できませんでした",
+          emptyFetchHint: "上のエラー案内を確認し、設定後に右上の ↻ で再読み込みしてください。",
+          chkToggleTitle: "完了状態を切り替え",
+          chkDisabledTitle: "checkbox 型プロパティが未検出のため変更不可",
+          openNotionTitle: "Notion で開く",
+          overduePill: (ymd) => `期限切れ ${ymd}`,
+          rangeEndPill: (ymd) => `〜 ${ymd}`,
+          openUrlErrTitle: "ブラウザ起動エラー",
+          toggleErrTitle: "完了状態の更新に失敗しました",
+          toggleErrTitleWith: (title) => `完了状態の更新に失敗しました (${title})`,
+          err404Title: "対象データベース／ページが見つかりません (404 / object_not_found)",
+          err404Hint: "Notion 側の対象データベース右上の「⋯」→「コネクト (Connections)」からインテグレーションを追加するか、開発者コンソールの「Content access」タブで共有設定を確認してください。",
+          err401Title: "Notion 認証エラーまたはトークン未設定",
+          err401Hint: "管理画面の「外部サービス接続（SaaS 連携）」で接続 ID と有効な API トークン（ntn_...）を設定または差し替えてください。",
+          err403Title: "権限不足エラー (403 / restricted_resource)",
+          err403Hint: "Notion 開発者コンソールの Capabilities で「Read content」およびチェック更新を行う場合は「Update content」権限が有効になっているか確認してください。",
+          errHttpTitle: (status) => status ? `Notion API エラー (HTTP ${status})` : "通信・設定エラー",
+          setupNoBridgeTitle: "window.DD ブリッジが利用できません",
+          setupNoBridgeReason: "この HTML は DesktopDashboards のローカル HTML ウィジェット (SourceType::File) として追加すると動作します。",
+          setupNoConnTitle: "接続 ID が未設定です",
+          setupNoConnReason: "管理画面のこのガジェットカード内「⚙ ウィジェット設定（DD.config）」で接続 ID（例: notion）を入力・保存してください。",
+          setupInvalidDbTitle: "Notion データベース ID の形式を認識できません",
+          setupInvalidDbReason: "有効な 32 桁 ID、UUID、または Notion データベースの URL を「⚙ ウィジェット設定（DD.config）」へ保存してください。",
+          setupNoDbTitle: "Notion データベース ID が未設定です",
+          setupNoDbReason: "管理画面のこのガジェットカード内「⚙ ウィジェット設定（DD.config）」へ対象データベース ID（または URL）を保存してください。",
+          errMissingDateTitle: "日付プロパティが見つかりません",
+          errMissingDateDetail: "データベースに date 型のプロパティが検出できませんでした。",
+          errMissingDateHint: "Notion データベースに日付列を作成するか、ガジェット設定の「日付プロパティ名」を指定してください。"
+        },
+        en: {
+          docTitle: "Notion Today's Tasks - DesktopDashboards",
+          heading: "Today's Tasks",
+          refreshTitle: "Reload",
+          closeTitle: "Close",
+          loading: "Loading...",
+          openConsoleBtn: "Open Notion Developer Console ↗",
+          step1: "In the Notion Developer Console, click <code>+ New connection</code> → enter a name → select <code>API token</code> (enable <code>Read content</code> / <code>Update content</code>)",
+          step2: "Save your Notion connection (e.g. Connection ID: <code>notion</code>) under \"External Service Connections\" in the Manager",
+          step3: "In Notion, open your target database's top-right <code>⋯</code> → <code>Connections</code> (or <code>Content access</code>) and share it with the integration",
+          step4: "Open \"⚙ Widget Settings (<code>DD.config</code>)\" on this widget card in the Manager and save the Connection ID and Database ID / URL",
+          weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+          notConfigured: "Not configured",
+          errorPill: "Error",
+          countPill: (active, total) => `${active} left / ${total}`,
+          untitled: "(Untitled)",
+          propsEmpty: "Properties: -",
+          propsInfo: (dateProp, doneProp) => `Properties: Date=${dateProp || "Not found"} / Done=${doneProp || "Not found"}`,
+          updatedText: (hms) => `Updated: ${hms || "-"}`,
+          emptyNoTasks: "No tasks for today",
+          emptyHiddenDone: (n) => `${n} completed task(s) hidden by settings`,
+          emptyAddHint: "New tasks added for today will appear here",
+          emptyFetchFailed: "Could not load tasks",
+          emptyFetchHint: "Check the error guidance above, update your settings, and click ↻ at the top right to retry.",
+          chkToggleTitle: "Toggle completion",
+          chkDisabledTitle: "Cannot modify (no checkbox property detected)",
+          openNotionTitle: "Open in Notion",
+          overduePill: (ymd) => `Overdue ${ymd}`,
+          rangeEndPill: (ymd) => `→ ${ymd}`,
+          openUrlErrTitle: "Failed to open browser",
+          toggleErrTitle: "Failed to update completion status",
+          toggleErrTitleWith: (title) => `Failed to update completion status (${title})`,
+          err404Title: "Database or page not found (404 / object_not_found)",
+          err404Hint: "In Notion, open the target database's top-right \"⋯\" → \"Connections\" and add your integration, or check sharing under \"Content access\" in the Developer Console.",
+          err401Title: "Notion authentication error or missing token",
+          err401Hint: "In the Manager's \"External Service Connections\", set or replace a valid Notion API token (ntn_...).",
+          err403Title: "Insufficient permissions (403 / restricted_resource)",
+          err403Hint: "Ensure \"Read content\" (and \"Update content\" if checking off tasks) is enabled under Capabilities in the Notion Developer Console.",
+          errHttpTitle: (status) => status ? `Notion API Error (HTTP ${status})` : "Network / Configuration Error",
+          setupNoBridgeTitle: "window.DD bridge is unavailable",
+          setupNoBridgeReason: "Add this HTML file as a Local HTML widget in DesktopDashboards to enable window.DD.",
+          setupNoConnTitle: "Connection ID is not set",
+          setupNoConnReason: "Open \"⚙ Widget Settings (DD.config)\" on this widget card in the Manager and save your Connection ID (e.g. notion).",
+          setupInvalidDbTitle: "Unrecognized Notion Database ID format",
+          setupInvalidDbReason: "Save a valid 32-char ID, UUID, or Notion database URL in \"⚙ Widget Settings (DD.config)\".",
+          setupNoDbTitle: "Notion Database ID is not set",
+          setupNoDbReason: "Save your target Database ID (or URL) in \"⚙ Widget Settings (DD.config)\" on this widget card in the Manager.",
+          errMissingDateTitle: "Date property not found",
+          errMissingDateDetail: "Could not detect any date property in this database.",
+          errMissingDateHint: "Add a date property to the Notion database or specify \"Date Property Name\" in Widget Settings."
+        }
+      };
+
+      function resolveLang(candidate) {
+        const raw = typeof candidate === "string" && candidate ? candidate : (window.__ddLang || navigator.language || "en");
+        return /^ja\b/i.test(raw) ? "ja" : "en";
+      }
+
+      let currentLang = resolveLang();
+      const L = () => I18N[currentLang] || I18N.en;
 
       const todayLabelEl = document.getElementById("today-label");
       const countPillEl = document.getElementById("count-pill");
@@ -429,6 +541,10 @@
       let currentTasks = [];
       let currentHiddenDoneCount = 0;
       let currentSchema = { titleProp: null, dateProp: null, doneProp: null };
+      let hasResolvedSchema = false;
+      let lastUpdatedHms = "";
+      let lastSetupStateKey = null;
+      let lastFetchFailed = false;
       let isLoading = false;
 
       function pad2(n) {
@@ -440,10 +556,6 @@
        */
       function formatLocalYmd(date) {
         return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-      }
-
-      function getLocalTodayYmd() {
-        return formatLocalYmd(new Date());
       }
 
       function addLocalDaysYmd(baseDate, deltaDays) {
@@ -461,7 +573,33 @@
 
       function updateTodayBadge() {
         const now = new Date();
-        todayLabelEl.textContent = `${formatLocalYmd(now)} (${WEEKDAYS_JA[now.getDay()]})`;
+        const weekdays = L().weekdays;
+        todayLabelEl.textContent = `${formatLocalYmd(now)} (${weekdays[now.getDay()]})`;
+      }
+
+      function updateFooterText() {
+        const dict = L();
+        footerPropsEl.textContent = hasResolvedSchema
+          ? dict.propsInfo(currentSchema.dateProp, currentSchema.doneProp)
+          : dict.propsEmpty;
+        footerUpdatedEl.textContent = dict.updatedText(lastUpdatedHms);
+      }
+
+      function applyStaticLanguage() {
+        const dict = L();
+        document.documentElement.lang = currentLang;
+        document.title = dict.docTitle;
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          el.textContent = dict[el.dataset.i18n];
+        });
+        document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+          el.innerHTML = dict[el.dataset.i18nHtml];
+        });
+        document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+          el.title = dict[el.dataset.i18nTitle];
+        });
+        updateTodayBadge();
+        updateFooterText();
       }
 
       /**
@@ -545,11 +683,12 @@
       }
 
       function buildNotionErrorGuidance(status, code, rawMessage) {
+        const dict = L();
         const lowerMsg = String(rawMessage || "").toLowerCase();
         if (status === 404 || code === "object_not_found") {
           return {
-            title: "対象データベース／ページが見つかりません (404 / object_not_found)",
-            hint: "Notion 側の対象データベース右上の「⋯」→「コネクト (Connections)」からインテグレーションを追加するか、開発者コンソールの「Content access」タブで共有設定を確認してください。",
+            title: dict.err404Title,
+            hint: dict.err404Hint,
           };
         }
         if (
@@ -561,18 +700,18 @@
           lowerMsg.includes("ダミー")
         ) {
           return {
-            title: "Notion 認証エラーまたはトークン未設定",
-            hint: "管理画面の「外部サービス接続（SaaS 連携）」で接続 ID と有効な API トークン（ntn_...）を設定または差し替えてください。",
+            title: dict.err401Title,
+            hint: dict.err401Hint,
           };
         }
         if (status === 403 || code === "restricted_resource") {
           return {
-            title: "権限不足エラー (403 / restricted_resource)",
-            hint: "Notion 開発者コンソールの Capabilities で「Read content」およびチェック更新を行う場合は「Update content」権限が有効になっているか確認してください。",
+            title: dict.err403Title,
+            hint: dict.err403Hint,
           };
         }
         return {
-          title: status ? `Notion API エラー (HTTP ${status})` : "通信・設定エラー",
+          title: dict.errHttpTitle(status),
           hint: "",
         };
       }
@@ -606,16 +745,29 @@
         taskListEl.hidden = !list;
       }
 
-      function showSetupState(title, reason) {
+      function showSetupState(stateKey) {
+        const dict = L();
+        lastSetupStateKey = stateKey;
+        lastFetchFailed = false;
+        hasResolvedSchema = false;
+        const map = {
+          noBridge: [dict.setupNoBridgeTitle, dict.setupNoBridgeReason],
+          noConn: [dict.setupNoConnTitle, dict.setupNoConnReason],
+          invalidDb: [dict.setupInvalidDbTitle, dict.setupInvalidDbReason],
+          noDb: [dict.setupNoDbTitle, dict.setupNoDbReason],
+        };
+        const [title, reason] = map[stateKey] || map.noConn;
         setupTitleEl.textContent = title;
         setupReasonEl.textContent = reason;
         applyViewVisibility({ setup: true });
-        countPillEl.textContent = "未設定";
+        countPillEl.textContent = dict.notConfigured;
         countPillEl.className = "count-pill";
-        footerPropsEl.textContent = "プロパティ: -";
+        updateFooterText();
       }
 
       function showTasksLoading() {
+        lastSetupStateKey = null;
+        lastFetchFailed = false;
         applyViewVisibility({ loading: true });
       }
 
@@ -700,7 +852,7 @@
 
         return {
           id: page.id,
-          title: title.trim() || "(無題)",
+          title: title.trim(),
           done,
           isOverdue,
           startYmd: dateInfo.startYmd,
@@ -712,6 +864,9 @@
       }
 
       function renderTaskList() {
+        const dict = L();
+        lastSetupStateKey = null;
+        lastFetchFailed = false;
         const showDone = currentConfig ? currentConfig.show_done !== false : true;
 
         const visibleTasks = currentTasks.filter((t) => showDone || !t.done);
@@ -728,17 +883,17 @@
 
         const activeCount = currentTasks.filter((t) => !t.done).length;
         const totalCount = currentTasks.length;
-        countPillEl.textContent = `未完了 ${activeCount} / ${totalCount}`;
+        countPillEl.textContent = dict.countPill(activeCount, totalCount);
         countPillEl.className = activeCount === 0 && totalCount > 0 ? "count-pill ok" : "count-pill";
 
         taskListEl.textContent = "";
         if (ordered.length === 0) {
           applyViewVisibility({ empty: true });
-          emptyTitleEl.textContent = "今日のタスクはありません";
+          emptyTitleEl.textContent = dict.emptyNoTasks;
           emptySubEl.textContent =
             hiddenDoneCount > 0
-              ? `完了済み ${hiddenDoneCount} 件は設定により非表示です`
-              : "新しいタスクを追加するとここに表示されます";
+              ? dict.emptyHiddenDone(hiddenDoneCount)
+              : dict.emptyAddHint;
           return;
         }
 
@@ -756,8 +911,8 @@
           chk.checked = item.done;
           chk.disabled = !currentSchema.doneProp || item.saving;
           chk.title = currentSchema.doneProp
-            ? "完了状態を切り替え"
-            : "checkbox 型プロパティが未検出のため変更不可";
+            ? dict.chkToggleTitle
+            : dict.chkDisabledTitle;
           chk.addEventListener("change", () => {
             void handleToggleDone(item, chk.checked);
           });
@@ -768,14 +923,14 @@
           const titleBtn = document.createElement("button");
           titleBtn.type = "button";
           titleBtn.className = item.url ? "task-title-btn" : "task-title-btn no-url";
-          titleBtn.textContent = item.title;
+          titleBtn.textContent = item.title || dict.untitled;
           if (item.url) {
-            titleBtn.title = "Notion で開く";
+            titleBtn.title = dict.openNotionTitle;
             titleBtn.addEventListener("click", async () => {
               try {
                 await window.DD.openUrl(item.url);
               } catch (err) {
-                showError("ブラウザ起動エラー", formatErrorMessage(err));
+                showError(L().openUrlErrTitle, formatErrorMessage(err));
               }
             });
           }
@@ -787,7 +942,7 @@
           if (item.isOverdue && !item.done) {
             const overduePill = document.createElement("span");
             overduePill.className = "pill overdue";
-            overduePill.textContent = `期限切れ ${item.startYmd}`;
+            overduePill.textContent = dict.overduePill(item.startYmd);
             meta.appendChild(overduePill);
           }
 
@@ -801,7 +956,7 @@
           if (item.endYmd && item.endYmd !== item.startYmd) {
             const rangePill = document.createElement("span");
             rangePill.className = "pill";
-            rangePill.textContent = `〜 ${item.endYmd}`;
+            rangePill.textContent = dict.rangeEndPill(item.endYmd);
             meta.appendChild(rangePill);
           }
 
@@ -846,23 +1001,25 @@
           }
 
           item.saving = false;
-          footerUpdatedEl.textContent = `最終更新: ${formatLocalTimeHms(new Date())}`;
+          lastUpdatedHms = formatLocalTimeHms(new Date());
+          updateFooterText();
           renderTaskList();
         } catch (err) {
           item.done = prevDone;
           item.saving = false;
           renderTaskList();
 
+          const dict = L();
           if (err && err.guidance) {
             showError(
-              `完了状態の更新に失敗しました (${err.guidance.title})`,
+              dict.toggleErrTitleWith(err.guidance.title),
               `${err.code ? `[${err.code}] ` : ""}${err.message}`,
               err.guidance.hint
             );
           } else {
             const rawMsg = formatErrorMessage(err);
             const guidance = buildNotionErrorGuidance(0, "", rawMsg);
-            showError("完了状態の更新に失敗しました", rawMsg, guidance.hint);
+            showError(dict.toggleErrTitle, rawMsg, guidance.hint);
           }
         }
       }
@@ -893,7 +1050,7 @@
           throw {
             status: dbRes.status,
             code: "missing_data_source",
-            message: "GET /v1/databases/{id} の応答に data_sources[0].id が含まれていません。",
+            message: "data_sources[0].id was missing from GET /v1/databases/{id} response.",
           };
         }
 
@@ -927,10 +1084,7 @@
         hideError();
 
         if (!hasBridge()) {
-          showSetupState(
-            "window.DD ブリッジが利用できません",
-            "この HTML は DesktopDashboards のローカル HTML ウィジェット (SourceType::File) として追加すると動作します。"
-          );
+          showSetupState("noBridge");
           refreshBtn.disabled = false;
           isLoading = false;
           return;
@@ -948,21 +1102,13 @@
           currentDbId = dbId || "";
 
           if (!connId) {
-            showSetupState(
-              "接続 ID が未設定です",
-              "管理画面のこのガジェットカード内「⚙ ウィジェット設定（DD.config）」で接続 ID（例: notion）を入力・保存してください。"
-            );
+            showSetupState("noConn");
             return;
           }
 
           if (!dbId) {
             const rawDb = String(currentConfig.database_id || "").trim();
-            showSetupState(
-              rawDb ? "Notion データベース ID の形式を認識できません" : "Notion データベース ID が未設定です",
-              rawDb
-                ? "有効な 32 桁 ID、UUID、または Notion データベースの URL を「⚙ ウィジェット設定（DD.config）」へ保存してください。"
-                : "管理画面のこのガジェットカード内「⚙ ウィジェット設定（DD.config）」へ対象データベース ID（または URL）を保存してください。"
-            );
+            showSetupState(rawDb ? "invalidDb" : "noDb");
             return;
           }
 
@@ -1107,17 +1253,18 @@
           }
 
           currentSchema = schema;
-          footerPropsEl.textContent =
-            `プロパティ: 日付=${schema.dateProp || "未検出"} / 完了=${schema.doneProp || "未検出"}`;
-          footerUpdatedEl.textContent = `最終更新: ${formatLocalTimeHms(new Date())}`;
+          hasResolvedSchema = true;
+          lastUpdatedHms = formatLocalTimeHms(new Date());
+          updateFooterText();
 
           if (!schema.dateProp) {
             currentTasks = [];
             renderTaskList();
+            const dict = L();
             showError(
-              "日付プロパティが見つかりません",
-              "データベースに date 型のプロパティが検出できませんでした。",
-              "Notion データベースに日付列を作成するか、ガジェット設定の「日付プロパティ名」を指定してください。"
+              dict.errMissingDateTitle,
+              dict.errMissingDateDetail,
+              dict.errMissingDateHint
             );
             return;
           }
@@ -1133,15 +1280,18 @@
           currentTasks = extracted;
           renderTaskList();
         } catch (err) {
+          const dict = L();
           const status = typeof err?.status === "number" ? err.status : 0;
           const code = typeof err?.code === "string" ? err.code : "";
           const rawMsg = err?.message ? String(err.message) : formatErrorMessage(err);
           const guidance = buildNotionErrorGuidance(status, code, rawMsg);
 
+          lastSetupStateKey = null;
+          lastFetchFailed = true;
           applyViewVisibility({ empty: true });
-          emptyTitleEl.textContent = "タスクを取得できませんでした";
-          emptySubEl.textContent = "上のエラー案内を確認し、設定後に右上の ↻ で再読み込みしてください。";
-          countPillEl.textContent = "エラー";
+          emptyTitleEl.textContent = dict.emptyFetchFailed;
+          emptySubEl.textContent = dict.emptyFetchHint;
+          countPillEl.textContent = dict.errorPill;
           countPillEl.className = "count-pill";
 
           showError(
@@ -1168,11 +1318,26 @@
         try {
           await window.DD.openUrl(NOTION_CONSOLE_URL);
         } catch (err) {
-          showError("ブラウザ起動エラー", formatErrorMessage(err));
+          showError(L().openUrlErrTitle, formatErrorMessage(err));
         }
       });
 
-      updateTodayBadge();
+      window.addEventListener("dd-language-changed", (ev) => {
+        currentLang = resolveLang(ev?.detail?.lang);
+        applyStaticLanguage();
+        const dict = L();
+        if (lastSetupStateKey) {
+          showSetupState(lastSetupStateKey);
+        } else if (lastFetchFailed) {
+          emptyTitleEl.textContent = dict.emptyFetchFailed;
+          emptySubEl.textContent = dict.emptyFetchHint;
+          countPillEl.textContent = dict.errorPill;
+        } else if (!isLoading) {
+          renderTaskList();
+        }
+      });
+
+      applyStaticLanguage();
       void loadTasks();
     })();
   </script>

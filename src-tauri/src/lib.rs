@@ -2,6 +2,7 @@ mod autostart;
 mod cli;
 mod config;
 mod dd_bridge;
+mod i18n;
 mod tray;
 mod widget;
 mod win32;
@@ -306,17 +307,18 @@ pub(crate) fn resolve_samples_dir(app: &AppHandle) -> Option<std::path::PathBuf>
 }
 
 /// 指定された `samples/` ディレクトリ内の `sticky-todo.html` から初期デフォルトガジェットを生成する。
-pub fn default_sample_widget_for_dir(
+pub fn default_sample_widget_for_dir_with_lang(
     samples_dir: &std::path::Path,
     x: i32,
     y: i32,
+    lang: i18n::Language,
 ) -> Option<WidgetConfig> {
     let sticky_path = samples_dir.join("sticky-todo.html");
     if !sticky_path.is_file() {
         return None;
     }
     Some(WidgetConfig {
-        title: "付箋メモ＆ToDo".to_string(),
+        title: i18n::default_sticky_widget_title(lang).to_string(),
         source_type: SourceType::File,
         source: strip_windows_verbatim_prefix(&sticky_path),
         enabled: true,
@@ -329,11 +331,21 @@ pub fn default_sample_widget_for_dir(
     })
 }
 
+/// 指定された `samples/` ディレクトリ内の `sticky-todo.html` から初期デフォルトガジェットを生成する（日本語既定）。
+#[allow(dead_code)]
+pub fn default_sample_widget_for_dir(
+    samples_dir: &std::path::Path,
+    x: i32,
+    y: i32,
+) -> Option<WidgetConfig> {
+    default_sample_widget_for_dir_with_lang(samples_dir, x, y, i18n::Language::Ja)
+}
+
 /// 初回起動時（`config.json` 未作成時）にデフォルト登録するサンプルガジェットを構築する。
-pub fn build_default_sample_widget(app: &AppHandle) -> Option<WidgetConfig> {
+pub fn build_default_sample_widget(app: &AppHandle, lang: i18n::Language) -> Option<WidgetConfig> {
     let samples_dir = resolve_samples_dir(app)?;
     let (x, y) = next_cascade_position(app, &[]);
-    default_sample_widget_for_dir(&samples_dir, x, y)
+    default_sample_widget_for_dir_with_lang(&samples_dir, x, y, lang)
 }
 
 #[tauri::command]
@@ -366,9 +378,10 @@ async fn add_widget(
     source: String,
     title: String,
 ) -> Result<WidgetConfig, String> {
+    let lang = i18n::current_language(&app);
     let trimmed_source = source.trim().to_string();
     if trimmed_source.is_empty() {
-        return Err("URL またはファイルパスを入力してください".to_string());
+        return Err(i18n::err_empty_source(lang).to_string());
     }
 
     if source_type == SourceType::Url {
@@ -377,7 +390,7 @@ async fn add_widget(
 
     let path = std::path::Path::new(&trimmed_source);
     if !path.is_file() {
-        return Err(format!("ファイルが見つかりません: {trimmed_source}"));
+        return Err(i18n::err_file_not_found(lang, &trimmed_source));
     }
 
     let derived_title = if title.trim().is_empty() {
@@ -660,14 +673,12 @@ pub async fn duplicate_widget_internal(
             .ok_or_else(|| format!("widget not found: {source_id}"))?
     };
 
+    let lang = i18n::current_language(&app);
     if source_snapshot.source_type != SourceType::File {
-        return Err("URL ウィジェットは増やせません（ローカル HTML のみ対応）".to_string());
+        return Err(i18n::err_duplicate_url_not_supported(lang).to_string());
     }
     if !dd_bridge::is_widget_duplicable(&app, &source_snapshot) {
-        return Err(
-            "このウィジェットの manifest に \"duplicable\": true が宣言されていないため増やせません"
-                .to_string(),
-        );
+        return Err(i18n::err_duplicate_manifest_required(lang).to_string());
     }
 
     let (mx, my, mw, mh) =
@@ -881,6 +892,65 @@ async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
     autostart::apply_autostart_toggle(&app, enabled).await
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LanguageStateDto {
+    pub preference: String,
+    pub resolved: String,
+}
+
+#[tauri::command]
+fn get_language(app: AppHandle) -> Result<LanguageStateDto, String> {
+    let state = app
+        .try_state::<Arc<ConfigState>>()
+        .ok_or_else(|| "ConfigState not initialized".to_string())?;
+    let cfg = state
+        .config
+        .lock()
+        .map_err(|e| format!("config lock poisoned: {e}"))?;
+    let preference = i18n::normalize_preference(&cfg.language).to_string();
+    let resolved = i18n::resolve_language(&preference);
+    Ok(LanguageStateDto {
+        preference,
+        resolved: resolved.code().to_string(),
+    })
+}
+
+#[tauri::command]
+async fn set_language(
+    app: AppHandle,
+    window: WebviewWindow,
+    preference: String,
+) -> Result<LanguageStateDto, String> {
+    dd_bridge::verify_manager_caller(window.label())?;
+    let normalized = i18n::normalize_preference(&preference).to_string();
+
+    let state = app
+        .try_state::<Arc<ConfigState>>()
+        .ok_or_else(|| "ConfigState not initialized".to_string())?;
+    {
+        let mut cfg = state
+            .config
+            .lock()
+            .map_err(|e| format!("config lock poisoned: {e}"))?;
+        cfg.language = normalized.clone();
+    }
+    state.save_now()?;
+
+    let resolved = i18n::resolve_language(&normalized);
+    if let Some(win) = app.get_webview_window("manager") {
+        let _ = win.set_title(i18n::manager_window_title(resolved));
+    }
+    tray::refresh_tray_menu(&app);
+    widget::apply_language_to_all_widgets(&app, resolved);
+
+    let dto = LanguageStateDto {
+        preference: normalized,
+        resolved: resolved.code().to_string(),
+    };
+    let _ = app.emit("language-updated", dto.clone());
+    Ok(dto)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -916,6 +986,9 @@ pub fn run() {
             }
 
             if let Some(manager_win) = app.get_webview_window("manager") {
+                let _ = manager_win.set_title(i18n::manager_window_title(
+                    i18n::current_language(app.handle()),
+                ));
                 let win_clone = manager_win.clone();
                 manager_win.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
@@ -956,6 +1029,8 @@ pub fn run() {
             reload_all_widgets,
             get_autostart,
             set_autostart,
+            get_language,
+            set_language,
             dd_bridge::dd_storage_get,
             dd_bridge::dd_storage_set,
             dd_bridge::dd_connect_request,

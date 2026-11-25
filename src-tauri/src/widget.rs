@@ -273,12 +273,16 @@ fn build_widget_init_script(
     inject_dd_bridge: bool,
     allow_legacy_local_storage: bool,
     duplicable: bool,
+    lang: crate::i18n::Language,
 ) -> String {
     let home_json = serde_json::to_string(home_url).unwrap_or_else(|_| "\"\"".to_string());
     let css_json = serde_json::to_string(custom_css).unwrap_or_else(|_| "\"\"".to_string());
+    let lang_json = serde_json::to_string(lang.code()).unwrap_or_else(|_| "\"en\"".to_string());
+    let hover_labels_json = serde_json::to_string(&crate::i18n::hover_bar_labels(lang))
+        .unwrap_or_else(|_| "{}".to_string());
     let locked_str = if locked { "true" } else { "false" };
     let duplicate_btn_script = if inject_dd_bridge && duplicable {
-        "    btnGroup.appendChild(mkBtn('＋', '新しいウィンドウを増やす', () => invokeAction('duplicate')));\n"
+        "    dupBtn = mkBtn('＋', hoverLabels.duplicate || '', () => invokeAction('duplicate'));\n    btnGroup.appendChild(dupBtn);\n"
     } else {
         ""
     };
@@ -362,6 +366,9 @@ fn build_widget_init_script(
   window.__ddRuntimeInstalled = true;
 
   const HOME_URL = {home_json};
+  let currentLang = {lang_json};
+  let hoverLabels = {hover_labels_json};
+  window.__ddLang = currentLang;
   let isLocked = {locked_str};
   window.__ddGetLocked = () => isLocked;
   let currentCustomCss = {css_json};
@@ -369,7 +376,36 @@ fn build_widget_init_script(
   let pendingReloadTimer = null;
   let hostEl = null;
   let styleEl = null;
+  let dragAreaEl = null;
+  let dupBtn = null;
+  let homeBtn = null;
+  let reloadBtn = null;
+  let lockBtn = null;
+  let closeBtn = null;
   let __ddHasActiveMutations = null;
+
+  function updateHoverBarLabels() {{
+    if (dragAreaEl && typeof hoverLabels.drag === 'string') dragAreaEl.textContent = hoverLabels.drag;
+    if (dupBtn && typeof hoverLabels.duplicate === 'string') dupBtn.title = hoverLabels.duplicate;
+    if (homeBtn && typeof hoverLabels.home === 'string') homeBtn.title = hoverLabels.home;
+    if (reloadBtn && typeof hoverLabels.reload === 'string') reloadBtn.title = hoverLabels.reload;
+    if (lockBtn && typeof hoverLabels.lock === 'string') lockBtn.title = hoverLabels.lock;
+    if (closeBtn && typeof hoverLabels.close === 'string') closeBtn.title = hoverLabels.close;
+  }}
+
+  window.__ddSetLanguage = (nextLang, nextLabels) => {{
+    if (nextLang === 'ja' || nextLang === 'en') {{
+      currentLang = nextLang;
+      window.__ddLang = currentLang;
+    }}
+    if (nextLabels && typeof nextLabels === 'object') {{
+      hoverLabels = nextLabels;
+      updateHoverBarLabels();
+    }}
+    try {{
+      window.dispatchEvent(new CustomEvent('dd-language-changed', {{ detail: {{ lang: currentLang }} }}));
+    }} catch (_) {{}}
+  }};
 
   const markInteraction = () => {{ lastInteractionAt = Date.now(); }};
   document.addEventListener('pointerdown', markInteraction, true);
@@ -466,7 +502,8 @@ fn build_widget_init_script(
     ].join(';');
 
     const dragArea = document.createElement('div');
-    dragArea.textContent = '⋮⋮ ドラッグで移動';
+    dragAreaEl = dragArea;
+    dragArea.textContent = hoverLabels.drag || '⋮⋮ Drag to move';
     dragArea.style.cssText = 'flex:1;cursor:move;display:flex;align-items:center;height:100%;';
     dragArea.addEventListener('mousedown', (e) => {{
       if (e.button !== 0 || isLocked) return;
@@ -490,10 +527,15 @@ fn build_widget_init_script(
       return b;
     }};
 
-{duplicate_btn_script}    btnGroup.appendChild(mkBtn('⌂', 'ホームへ戻る', () => invokeAction('home')));
-    btnGroup.appendChild(mkBtn('↻', '再読み込み', () => invokeAction('reload')));
-    btnGroup.appendChild(mkBtn('🔒', 'ロックする', () => invokeAction('lock')));
-    btnGroup.appendChild(mkBtn('✕', '閉じる（非表示）', () => invokeAction('close')));
+{duplicate_btn_script}    homeBtn = mkBtn('⌂', hoverLabels.home || 'Home', () => invokeAction('home'));
+    reloadBtn = mkBtn('↻', hoverLabels.reload || 'Reload', () => invokeAction('reload'));
+    lockBtn = mkBtn('🔒', hoverLabels.lock || 'Lock', () => invokeAction('lock'));
+    closeBtn = mkBtn('✕', hoverLabels.close || 'Close (Hide)', () => invokeAction('close'));
+    btnGroup.appendChild(homeBtn);
+    btnGroup.appendChild(reloadBtn);
+    btnGroup.appendChild(lockBtn);
+    btnGroup.appendChild(closeBtn);
+    updateHoverBarLabels();
 
     bar.appendChild(dragArea);
     bar.appendChild(btnGroup);
@@ -838,6 +880,23 @@ pub fn apply_placement_mode(window: &tauri::WebviewWindow, widget: &WidgetConfig
     }
 }
 
+/// 表示中の全ガジェットウィンドウへ言語変更（ホバーバー含む）を反映する。
+pub fn apply_language_to_all_widgets(app: &AppHandle, lang: crate::i18n::Language) {
+    let Ok(lang_json) = serde_json::to_string(lang.code()) else {
+        return;
+    };
+    let Ok(labels_json) = serde_json::to_string(&crate::i18n::hover_bar_labels(lang)) else {
+        return;
+    };
+    let script =
+        format!("window.__ddSetLanguage && window.__ddSetLanguage({lang_json}, {labels_json});");
+    for (label, win) in app.webview_windows() {
+        if label.starts_with("widget-") {
+            let _ = win.eval(&script);
+        }
+    }
+}
+
 /// 既存ガジェットウィンドウにランタイム設定（配置モード・ロック・透明度・クリック透過・NOACTIVATE・ズーム・カスタムCSS）を適用する。
 pub fn apply_runtime_settings(app: &AppHandle, widget: &WidgetConfig) {
     let label = widget_label(&widget.id);
@@ -904,6 +963,7 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
     } else {
         false
     };
+    let current_lang = crate::i18n::current_language(&app);
     let init_script = build_widget_init_script(
         &widget.id,
         widget.locked,
@@ -912,6 +972,7 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
         inject_dd_bridge,
         allow_legacy_local_storage,
         duplicable,
+        current_lang,
     );
     let link_intercept_script =
         build_link_intercept_script(&home_url_str, widget.locked, inject_dd_bridge);
@@ -933,6 +994,15 @@ pub async fn create_widget_window(app: AppHandle, widget: WidgetConfig) -> Resul
             move |win, payload| {
                 if payload.event() == PageLoadEvent::Finished {
                     let app_handle = win.app_handle();
+                    let lang = crate::i18n::current_language(app_handle);
+                    if let (Ok(lang_json), Ok(labels_json)) = (
+                        serde_json::to_string(lang.code()),
+                        serde_json::to_string(&crate::i18n::hover_bar_labels(lang)),
+                    ) {
+                        let _ = win.eval(&format!(
+                            "window.__ddSetLanguage && window.__ddSetLanguage({lang_json}, {labels_json});"
+                        ));
+                    }
                     if let Some(state) = app_handle.try_state::<Arc<ConfigState>>() {
                         if let Ok(cfg) = state.config.lock() {
                             if let Some(w) = cfg.widgets.iter().find(|w| w.id == widget_id) {
@@ -1342,6 +1412,7 @@ mod tests {
             true,
             false,
             false,
+            crate::i18n::Language::Ja,
         );
         assert!(file_script.contains("if (window !== window.top) return;"));
         assert!(file_script.contains(
@@ -1364,6 +1435,7 @@ mod tests {
             false,
             false,
             false,
+            crate::i18n::Language::Ja,
         );
         assert!(url_script.contains("if (window !== window.top) return;"));
         assert!(url_script.contains("window.__ddGetLocked = () => isLocked;"));
@@ -1389,6 +1461,7 @@ mod tests {
             true,
             true,
             true,
+            crate::i18n::Language::Ja,
         );
         assert!(legacy_dup.contains(r#"const WIDGET_ID = "legacy-1";"#));
         assert!(legacy_dup.contains("const ALLOW_LEGACY_FALLBACK = true;"));
@@ -1405,11 +1478,31 @@ mod tests {
             true,
             false,
             false,
+            crate::i18n::Language::Ja,
         );
         assert!(isolated_non_dup.contains(r#"const WIDGET_ID = "dup-2";"#));
         assert!(isolated_non_dup.contains("const ALLOW_LEGACY_FALLBACK = false;"));
         assert!(isolated_non_dup.contains("__ddLocalStorageShimmed"));
         assert!(!isolated_non_dup.contains("invokeAction('duplicate')"));
+    }
+
+    #[test]
+    fn init_script_localizes_hover_bar_and_language_hooks() {
+        let en_script = build_widget_init_script(
+            "w-en",
+            false,
+            "http://widgetfile.localhost/w-en/",
+            "",
+            true,
+            false,
+            true,
+            crate::i18n::Language::En,
+        );
+        assert!(en_script.contains(r#"let currentLang = "en";"#));
+        assert!(en_script.contains("Drag to move"));
+        assert!(en_script.contains("New window"));
+        assert!(en_script.contains("window.__ddSetLanguage"));
+        assert!(en_script.contains("dd-language-changed"));
     }
 
     #[test]

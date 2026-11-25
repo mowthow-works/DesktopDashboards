@@ -14,9 +14,11 @@ pub struct AppQuitFlag(pub AtomicBool);
 
 /// トレイメニューを構築する。
 pub fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
+    let lang = crate::i18n::current_language(app);
     let mut builder = MenuBuilder::new(app);
 
-    let open_item = MenuItemBuilder::with_id("open_manager", "管理画面を開く").build(app)?;
+    let open_item =
+        MenuItemBuilder::with_id("open_manager", crate::i18n::tray_open_manager(lang)).build(app)?;
     builder = builder.item(&open_item).separator();
 
     let widgets = if let Some(state) = app.try_state::<Arc<ConfigState>>() {
@@ -30,9 +32,10 @@ pub fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     };
 
     if widgets.is_empty() {
-        let empty_item = MenuItemBuilder::with_id("no_widgets", "(ガジェット未登録)")
-            .enabled(false)
-            .build(app)?;
+        let empty_item =
+            MenuItemBuilder::with_id("no_widgets", crate::i18n::tray_no_widgets(lang))
+                .enabled(false)
+                .build(app)?;
         builder = builder.item(&empty_item);
     } else {
         for w in &widgets {
@@ -45,16 +48,17 @@ pub fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     let autostart_enabled = autostart::get_cached_autostart();
 
-    let lock_all_item = MenuItemBuilder::with_id("lock_all", "すべてロック").build(app)?;
+    let lock_all_item =
+        MenuItemBuilder::with_id("lock_all", crate::i18n::tray_lock_all(lang)).build(app)?;
     let unlock_all_item =
-        MenuItemBuilder::with_id("unlock_all", "すべてロック解除").build(app)?;
+        MenuItemBuilder::with_id("unlock_all", crate::i18n::tray_unlock_all(lang)).build(app)?;
     let reload_all_item =
-        MenuItemBuilder::with_id("reload_all", "すべて再読み込み").build(app)?;
+        MenuItemBuilder::with_id("reload_all", crate::i18n::tray_reload_all(lang)).build(app)?;
     let autostart_item =
-        CheckMenuItemBuilder::with_id("autostart", "Windows起動時に自動起動")
+        CheckMenuItemBuilder::with_id("autostart", crate::i18n::tray_autostart(lang))
             .checked(autostart_enabled)
             .build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "終了").build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", crate::i18n::tray_quit(lang)).build(app)?;
 
     builder
         .separator()

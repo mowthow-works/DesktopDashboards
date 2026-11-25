@@ -1539,12 +1539,32 @@ pub struct PreparedHttpRequest {
 }
 
 /// テスト可能な接続解決・権限積集合・資格情報取得・ヘッダ生成パイプライン。
+#[allow(dead_code)]
 pub fn prepare_connect_request(
     html_path: &Path,
     connections_path: &Path,
     connectors: &BTreeMap<String, ConnectorManifest>,
     cred_store: &dyn CredentialStore,
     request: &ConnectRequest,
+) -> Result<PreparedHttpRequest, String> {
+    prepare_connect_request_with_lang(
+        html_path,
+        connections_path,
+        connectors,
+        cred_store,
+        request,
+        crate::i18n::Language::Ja,
+    )
+}
+
+/// 言語指定付きで接続解決・権限積集合・資格情報取得・ヘッダ生成パイプラインを実行する。
+pub fn prepare_connect_request_with_lang(
+    html_path: &Path,
+    connections_path: &Path,
+    connectors: &BTreeMap<String, ConnectorManifest>,
+    cred_store: &dyn CredentialStore,
+    request: &ConnectRequest,
+    lang: crate::i18n::Language,
 ) -> Result<PreparedHttpRequest, String> {
     let widget_manifest = load_widget_manifest_for_html(html_path)?
         .ok_or_else(|| "widget manifest not found: DD.connect is disabled in restricted mode".to_string())?;
@@ -1579,10 +1599,7 @@ pub fn prepare_connect_request(
         .map(|s| s.trim().to_string())
         .filter(|s| !is_dummy_or_empty_token(s))
         .ok_or_else(|| {
-            format!(
-                "接続 '{}' の認証情報 ({}) が Windows 資格情報マネージャーに未設定またはダミー値です (ターゲット: {})",
-                request.connection, cred_key, target_name
-            )
+            crate::i18n::err_credential_not_configured(lang, &request.connection, cred_key, &target_name)
         })?;
 
     let method_upper = request.method.trim().to_ascii_uppercase();
@@ -1676,8 +1693,15 @@ pub async fn dd_connect_request(
     let connectors = load_connectors_for_app(&app);
     let cred_store = Win32CredentialStore;
 
-    let prepared =
-        prepare_connect_request(&html_path, &conn_path, &connectors, &cred_store, &request)?;
+    let lang = crate::i18n::current_language(&app);
+    let prepared = prepare_connect_request_with_lang(
+        &html_path,
+        &conn_path,
+        &connectors,
+        &cred_store,
+        &request,
+        lang,
+    )?;
 
     let mut req_builder = http_client()
         .request(prepared.method, &prepared.target_url)
@@ -1816,18 +1840,32 @@ pub fn list_connections_with_store(
     Ok(out)
 }
 
+#[allow(dead_code)]
 pub fn save_connection_with_store(
     connections_path: &Path,
     connectors: &BTreeMap<String, ConnectorManifest>,
     cred_store: &dyn CredentialStore,
     input: &SaveConnectionInput,
 ) -> Result<ConnectionSummaryDto, String> {
+    save_connection_with_store_lang(
+        connections_path,
+        connectors,
+        cred_store,
+        input,
+        crate::i18n::Language::Ja,
+    )
+}
+
+pub fn save_connection_with_store_lang(
+    connections_path: &Path,
+    connectors: &BTreeMap<String, ConnectorManifest>,
+    cred_store: &dyn CredentialStore,
+    input: &SaveConnectionInput,
+    lang: crate::i18n::Language,
+) -> Result<ConnectionSummaryDto, String> {
     let id = input.id.trim();
     if !is_safe_identifier(id) {
-        return Err(
-            "接続 ID は空欄不可で、英数字・ハイフン(-)・アンダースコア(_)のみ使用できます"
-                .to_string(),
-        );
+        return Err(crate::i18n::err_conn_id_invalid(lang).to_string());
     }
 
     let connector_id = input.connector_id.trim();
@@ -1849,9 +1887,7 @@ pub fn save_connection_with_store(
         let trimmed = val.trim();
         if !trimmed.is_empty() {
             if is_dummy_or_empty_token(trimmed) {
-                return Err(
-                    "ダミートークンは保存できません。実際のトークンを入力してください".to_string(),
-                );
+                return Err(crate::i18n::err_dummy_token(lang).to_string());
             }
             pending_secrets.push((key.clone(), trimmed.to_string()));
         }
@@ -1873,7 +1909,7 @@ pub fn save_connection_with_store(
                 .map(|s| !is_dummy_or_empty_token(&s))
                 .unwrap_or(false);
             if !existing_valid {
-                return Err("必須の認証情報（トークン等）を入力してください".to_string());
+                return Err(crate::i18n::err_missing_required_credential(lang).to_string());
             }
         }
     }
@@ -1890,7 +1926,7 @@ pub fn save_connection_with_store(
             .map(|s| !is_dummy_or_empty_token(&s))
             .unwrap_or(false);
         if !valid_after {
-            return Err("必須の認証情報（トークン等）を入力してください".to_string());
+            return Err(crate::i18n::err_missing_required_credential(lang).to_string());
         }
     }
 
@@ -1951,11 +1987,28 @@ pub fn delete_connection_with_store(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn evaluate_test_response(
     connection_id: &str,
     connector_id: &str,
     status: u16,
     body_text: &str,
+) -> TestConnectionResultDto {
+    evaluate_test_response_with_lang(
+        connection_id,
+        connector_id,
+        status,
+        body_text,
+        crate::i18n::Language::Ja,
+    )
+}
+
+pub fn evaluate_test_response_with_lang(
+    connection_id: &str,
+    connector_id: &str,
+    status: u16,
+    body_text: &str,
+    lang: crate::i18n::Language,
 ) -> TestConnectionResultDto {
     let parsed = if body_text.trim().is_empty() {
         None
@@ -1964,7 +2017,8 @@ pub fn evaluate_test_response(
     };
 
     if (200..300).contains(&status) {
-        let summary = format!("接続成功 (HTTP {status})");
+        let summary = crate::i18n::test_conn_success_summary(lang, status);
+        let default_detail = crate::i18n::test_conn_ok_default_detail(lang).to_string();
         let detail = if let Some(val) = &parsed {
             let name = val
                 .get("name")
@@ -1984,22 +2038,19 @@ pub fn evaluate_test_response(
 
             match (name, kind, obj_id) {
                 (Some(n), Some(k), _) if connector_id == "notion" => {
-                    format!("Bot名: {n} (type: {k})")
+                    crate::i18n::test_conn_notion_bot_detail(lang, n, k)
                 }
                 (Some(n), Some(k), _) => format!("{n} (type: {k})"),
                 (Some(n), None, _) => n.to_string(),
                 (None, _, Some(oid)) => format!("ID: {oid}"),
-                _ => "疎通確認に成功しました。".to_string(),
+                _ => default_detail,
             }
         } else {
-            "疎通確認に成功しました。".to_string()
+            default_detail
         };
 
         let hint = if connector_id == "notion" {
-            Some(
-                "DB を参照するには、Notion 側の対象データベースの「⋯」→「コネクト」でこのインテグレーションを追加してください。"
-                    .to_string(),
-            )
+            Some(crate::i18n::test_conn_notion_ok_hint(lang).to_string())
         } else {
             None
         };
@@ -2030,21 +2081,15 @@ pub fn evaluate_test_response(
         (true, true) => format!("[{code}] {message}"),
         (false, true) => message.to_string(),
         (true, false) => format!("[{code}]"),
-        (false, false) => format!("HTTP {status} エラーが返されました。"),
+        (false, false) => crate::i18n::test_conn_http_err_detail(lang, status),
     };
 
     let hint = if status == 401 || code == "unauthorized" {
-        Some(
-            "トークンが無効または取り消されている可能性があります。「編集」から正しいトークンに差し替えてください。"
-                .to_string(),
-        )
+        Some(crate::i18n::test_conn_hint_401(lang).to_string())
     } else if status == 404 || code == "object_not_found" {
-        Some(
-            "対象のリソース／データベースが見つかりません。Notion 側の対象ページ・DB でこのインテグレーションが共有（コネクト追加）されているか確認してください。"
-                .to_string(),
-        )
+        Some(crate::i18n::test_conn_hint_404(lang).to_string())
     } else if status == 403 || code == "restricted_resource" {
-        Some("インテグレーションの権限（Read content 等）が不足している可能性があります。".to_string())
+        Some(crate::i18n::test_conn_hint_403(lang).to_string())
     } else {
         None
     };
@@ -2054,7 +2099,7 @@ pub fn evaluate_test_response(
         connector_id: connector_id.to_string(),
         ok: false,
         status,
-        summary: format!("接続失敗 (HTTP {status})"),
+        summary: crate::i18n::test_conn_fail_summary(lang, status),
         detail,
         hint,
     }
@@ -2088,9 +2133,11 @@ pub fn save_connection(
     input: SaveConnectionInput,
 ) -> Result<ConnectionSummaryDto, String> {
     verify_manager_caller(window.label())?;
+    let lang = crate::i18n::current_language(&app);
     let conn_path = connections_file_path(&app)?;
     let connectors = load_connectors_for_app(&app);
-    let summary = save_connection_with_store(&conn_path, &connectors, &Win32CredentialStore, &input)?;
+    let summary =
+        save_connection_with_store_lang(&conn_path, &connectors, &Win32CredentialStore, &input, lang)?;
     let _ = app.emit("connections-updated", ());
     Ok(summary)
 }
@@ -2116,6 +2163,7 @@ pub async fn test_connection(
     id: String,
 ) -> Result<TestConnectionResultDto, String> {
     verify_manager_caller(window.label())?;
+    let lang = crate::i18n::current_language(&app);
     let conn_id = id.trim().to_string();
     if !is_safe_identifier(&conn_id) {
         return Err("invalid connection id".to_string());
@@ -2149,9 +2197,9 @@ pub async fn test_connection(
             connector_id: connector.id.clone(),
             ok: false,
             status: 0,
-            summary: "認証情報未設定".to_string(),
-            detail: "Windows 資格情報マネージャーにトークンが登録されていません。".to_string(),
-            hint: Some("「編集」からトークンを設定してください。".to_string()),
+            summary: crate::i18n::test_conn_no_cred_summary(lang).to_string(),
+            detail: crate::i18n::test_conn_no_cred_detail(lang).to_string(),
+            hint: Some(crate::i18n::test_conn_no_cred_hint(lang).to_string()),
         });
     };
 
@@ -2198,9 +2246,9 @@ pub async fn test_connection(
                 connector_id: connector.id.clone(),
                 ok: false,
                 status: 0,
-                summary: "通信エラー".to_string(),
+                summary: crate::i18n::test_conn_net_err_summary(lang).to_string(),
                 detail: format!("HTTP request failed: {}", e.without_url()),
-                hint: Some("ネットワーク接続やプロキシ設定を確認してください。".to_string()),
+                hint: Some(crate::i18n::test_conn_net_err_hint(lang).to_string()),
             });
         }
     };
@@ -2211,11 +2259,12 @@ pub async fn test_connection(
         .await
         .map_err(|e| format!("failed to read HTTP response body: {e}"))?;
 
-    Ok(evaluate_test_response(
+    Ok(evaluate_test_response_with_lang(
         &conn_id,
         &connector.id,
         status,
         &body_text,
+        lang,
     ))
 }
 
@@ -3831,5 +3880,78 @@ mod tests {
         assert!(!url_form.duplicable);
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn english_test_response_and_language_capability_isolation() {
+        let ok_res = evaluate_test_response_with_lang(
+            "notion",
+            "notion",
+            200,
+            r#"{"object":"user","id":"u1","name":"DesktopBot","type":"bot"}"#,
+            crate::i18n::Language::En,
+        );
+        assert!(ok_res.ok);
+        assert_eq!(ok_res.summary, "Connected (HTTP 200)");
+        assert!(ok_res.detail.contains("Bot name: DesktopBot"));
+        assert!(ok_res.hint.as_deref().unwrap().contains("Connections"));
+
+        let err_401 = evaluate_test_response_with_lang(
+            "notion",
+            "notion",
+            401,
+            r#"{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}"#,
+            crate::i18n::Language::En,
+        );
+        assert!(!err_401.ok);
+        assert_eq!(err_401.summary, "Connection failed (HTTP 401)");
+        assert!(err_401.hint.as_deref().unwrap().contains("invalid or revoked"));
+
+        let err_404 = evaluate_test_response_with_lang(
+            "notion",
+            "notion",
+            404,
+            r#"{"object":"error","status":404,"code":"object_not_found","message":"Missing"}"#,
+            crate::i18n::Language::En,
+        );
+        assert!(err_404.hint.as_deref().unwrap().contains("Connections"));
+
+        let err_403 = evaluate_test_response_with_lang(
+            "notion",
+            "notion",
+            403,
+            r#"{"object":"error","status":403,"code":"restricted_resource","message":"Denied"}"#,
+            crate::i18n::Language::En,
+        );
+        assert!(err_403.hint.as_deref().unwrap().contains("Read content"));
+
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let widgets_dd: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets-dd.json")).unwrap(),
+        )
+        .unwrap();
+        let default_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("default.json")).unwrap(),
+        )
+        .unwrap();
+        let widgets_cap: Value = serde_json::from_str(
+            &fs::read_to_string(manifest_dir.join("capabilities").join("widgets.json")).unwrap(),
+        )
+        .unwrap();
+
+        let def_perms = default_cap.get("permissions").and_then(Value::as_array).unwrap();
+        for p in ["allow-get-language", "allow-set-language"] {
+            assert!(
+                def_perms.iter().any(|v| v.as_str() == Some(p)),
+                "default.json missing {p}"
+            );
+        }
+
+        let dd_perms = widgets_dd.get("permissions").and_then(Value::as_array).unwrap();
+        let w_perms = widgets_cap.get("permissions").and_then(Value::as_array).unwrap();
+        for p in ["allow-get-language", "allow-set-language"] {
+            assert!(!dd_perms.iter().any(|v| v.as_str() == Some(p)));
+            assert!(!w_perms.iter().any(|v| v.as_str() == Some(p)));
+        }
     }
 }
